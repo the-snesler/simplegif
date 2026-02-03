@@ -50,7 +50,7 @@
 
 		{@render children?.()}
 
-		<div class="px-4 py-3 border-t border-zinc-800 bg-zinc-900 flex justify-end">
+		<div class="px-4 py-3 flex justify-end">
 			<DownloadButton />
 		</div>
 	</div>

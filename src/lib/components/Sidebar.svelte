@@ -26,7 +26,10 @@
 			>
 				<DNCamera class="text-green-400" />
 			</div>
-			<h1 class="font-semibold text-sm">SimpleGIF</h1>
+			<div>
+				<h1 class="font-semibold text-sm">SimpleGIF</h1>
+				<p class="text-xs text-zinc-500">Local GIF toolkit</p>
+			</div>
 		</a>
 	</div>
 

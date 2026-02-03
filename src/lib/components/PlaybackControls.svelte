@@ -200,7 +200,7 @@
 	}
 </script>
 
-<div class="flex items-center gap-2.5 px-3 py-2 border-t border-zinc-800 bg-zinc-900 text-sm">
+<div class="flex items-center gap-2.5 px-3 py-2 text-sm">
 	<!-- Play / Pause -->
 	<button
 		onclick={onTogglePlay}
@@ -312,7 +312,7 @@
 	</div>
 
 	<!-- Frame counter -->
-	<span class="text-zinc-500 tabular-nums text-xs min-w-[4.5rem] text-right shrink-0 font-mono tracking-tight">
+	<span class="text-zinc-500 tabular-nums text-xs text-right shrink-0 font-mono tracking-tight">
 		{String(currentFrame + 1).padStart(String(project.frameCount).length, '\u2007')}<span class="text-zinc-600"> / </span>{project.frameCount}
 	</span>
 </div>
