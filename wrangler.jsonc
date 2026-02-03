@@ -1,0 +1,61 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "simplegif",
+	"compatibility_date": "2025-11-06",
+	"assets": {
+    "directory": "./build"
+  },
+	"routes": [
+    {
+      "pattern": "simplegif.samnesler.com",
+      "custom_domain": true
+    }
+  ],
+	"preview_urls": true
+	/**
+	 * Smart Placement
+	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+	 */
+	// "placement": { "mode": "smart" }
+	/**
+	 * Bindings
+	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
+	 * databases, object storage, AI inference, real-time communication and more.
+	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
+	 */
+	/**
+	 * Environment Variables
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+	 */
+	// "vars": { "MY_VARIABLE": "production_value" }
+	/**
+	 * Secrets (Sensitive Data)
+	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 *
+	 * For the AI station, set the OpenAI API key as a secret:
+	 *
+	 * Production deployment:
+	 *   wrangler secret put OPENAI_API_KEY
+	 *
+	 * Local development:
+	 *   Create a .dev.vars file with:
+	 *   OPENAI_API_KEY=sk-proj-...your-key-here...
+	 *
+	 * Required secrets:
+	 *   - OPENAI_API_KEY: OpenAI API key for GPT-4.1 nano model
+	 */
+	/**
+	 * Static Assets
+	 * https://developers.cloudflare.com/workers/static-assets/binding/
+	 */
+	// "assets": { "directory": "./public/", "binding": "ASSETS" }
+	/**
+	 * Service Bindings (communicate between multiple Workers)
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
+	 */
+	// "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
+}
