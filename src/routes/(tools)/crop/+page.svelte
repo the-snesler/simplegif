@@ -1,30 +1,39 @@
 <script lang="ts">
 	import ToolPanel from '$lib/components/ToolPanel.svelte';
-	import NumberInput from '$lib/components/controls/NumberInput.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
+	import { cropStore } from '$lib/stores/crop.svelte';
 	import { cropFrames } from '$lib/processing/transforms/crop';
-	import type { CropRect } from '$lib/types';
+	import { onMount } from 'svelte';
 
-	let cropRect = $state<CropRect>({
-		x: 0,
-		y: 0,
-		width: project.width || 100,
-		height: project.height || 100
+	onMount(() => {
+		if (project.isLoaded) {
+			cropStore.activate(project.width, project.height);
+		}
+		return () => cropStore.deactivate();
 	});
 
 	$effect(() => {
 		if (project.isLoaded) {
-			cropRect = { x: 0, y: 0, width: project.width, height: project.height };
+			cropStore.activate(project.width, project.height);
 		}
 	});
 
+	let hasSelection = $derived(
+		cropStore.rect.x !== 0 ||
+			cropStore.rect.y !== 0 ||
+			cropStore.rect.width !== project.width ||
+			cropStore.rect.height !== project.height
+	);
+
 	async function applyCrop() {
+		const rect = cropStore.rect;
 		processing.start('Cropping frames...');
 		try {
-			const newFrames = cropFrames(project.frames, cropRect, (pct) => processing.update(pct));
+			const newFrames = cropFrames(project.frames, rect, (pct) => processing.update(pct));
 			project.updateFrames(newFrames);
-			project.updateDimensions(cropRect.width, cropRect.height);
+			project.updateDimensions(rect.width, rect.height);
+			cropStore.activate(rect.width, rect.height);
 		} catch (err) {
 			console.error('Failed to crop:', err);
 		} finally {
@@ -41,21 +50,32 @@
 	/>
 </svelte:head>
 
-<ToolPanel title="Crop" description="Crop the viewport of your GIF." onApply={applyCrop}>
-	<div class="grid grid-cols-2 gap-3">
-		<NumberInput label="X" bind:value={cropRect.x} min={0} max={project.width - 1} />
-		<NumberInput label="Y" bind:value={cropRect.y} min={0} max={project.height - 1} />
-		<NumberInput
-			label="Width"
-			bind:value={cropRect.width}
-			min={1}
-			max={project.width - cropRect.x}
-		/>
-		<NumberInput
-			label="Height"
-			bind:value={cropRect.height}
-			min={1}
-			max={project.height - cropRect.y}
-		/>
+<ToolPanel title="Crop" description="Drag the handles on the preview to select your crop area." onApply={applyCrop}>
+	<div class="space-y-2">
+		<div class="flex items-center justify-between text-xs text-zinc-400">
+			<span>Selection</span>
+			{#if hasSelection}
+				<button
+					class="text-green-500 hover:text-green-400 transition-colors"
+					onclick={() => cropStore.activate(project.width, project.height)}
+				>
+					Reset
+				</button>
+			{/if}
+		</div>
+		<div class="grid grid-cols-2 gap-2 text-sm">
+			<div class="bg-zinc-800 rounded px-2.5 py-1.5 text-zinc-300 tabular-nums">
+				<span class="text-zinc-500 text-xs">X</span> {cropStore.rect.x}
+			</div>
+			<div class="bg-zinc-800 rounded px-2.5 py-1.5 text-zinc-300 tabular-nums">
+				<span class="text-zinc-500 text-xs">Y</span> {cropStore.rect.y}
+			</div>
+			<div class="bg-zinc-800 rounded px-2.5 py-1.5 text-zinc-300 tabular-nums">
+				<span class="text-zinc-500 text-xs">W</span> {cropStore.rect.width}
+			</div>
+			<div class="bg-zinc-800 rounded px-2.5 py-1.5 text-zinc-300 tabular-nums">
+				<span class="text-zinc-500 text-xs">H</span> {cropStore.rect.height}
+			</div>
+		</div>
 	</div>
 </ToolPanel>

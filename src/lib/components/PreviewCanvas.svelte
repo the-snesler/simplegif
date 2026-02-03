@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { project } from '$lib/stores/project.svelte';
 	import { filmstrip } from '$lib/stores/filmstrip.svelte';
+	import { cropStore } from '$lib/stores/crop.svelte';
+	import CropOverlay from './controls/CropOverlay.svelte';
 	import { untrack } from 'svelte';
 
 	let canvas = $state<HTMLCanvasElement | null>(null);
@@ -121,5 +123,8 @@
 			class="max-w-full max-h-full object-contain rounded bg-zinc-900"
 			style="image-rendering: pixelated;"
 		></canvas>
+		{#if cropStore.active && canvas}
+			<CropOverlay canvasEl={canvas} maxWidth={project.width} maxHeight={project.height} />
+		{/if}
 	</div>
 </div>
