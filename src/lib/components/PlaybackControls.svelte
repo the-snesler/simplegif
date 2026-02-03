@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { project } from '$lib/stores/project.svelte';
+	import { filmstrip } from '$lib/stores/filmstrip.svelte';
+	import { untrack } from 'svelte';
 
 	let {
 		currentFrame = 0,
@@ -13,66 +15,304 @@
 		onFrameChange?: (frame: number) => void;
 	} = $props();
 
-	function handleScrub(e: Event) {
-		const input = e.target as HTMLInputElement;
-		onFrameChange?.(parseInt(input.value));
+	const STRIP_HEIGHT = 48;
+
+	let stripContainer = $state<HTMLDivElement | null>(null);
+	let stripCanvas = $state<HTMLCanvasElement | null>(null);
+	let isDraggingScrub = $state(false);
+	let isDraggingTrimStart = $state(false);
+	let isDraggingTrimEnd = $state(false);
+
+	// Track the frame array reference and width to regenerate thumbnails when they change
+	let lastFramesRef: unknown = null;
+	let lastStripWidth = 0;
+	let stripWidth = $state(0);
+
+	// Playhead position as a percentage
+	let playheadPct = $derived(
+		project.frameCount > 1 ? (currentFrame / (project.frameCount - 1)) * 100 : 0
+	);
+
+	// Trim positions as percentages (0–100) for overlays and borders
+	let trimStartPct = $derived(
+		project.frameCount > 1 ? (filmstrip.trimStart / (project.frameCount - 1)) * 100 : 0
+	);
+	let trimEndPct = $derived(
+		project.frameCount > 1 ? (filmstrip.trimEnd / (project.frameCount - 1)) * 100 : 100
+	);
+
+	// Handle positions: interpolate across (0) to (100% - handle width) so
+	// handles always stay fully inside the container. Handle is w-4 = 1rem = 16px.
+	const HANDLE_W = 16;
+	let trimStartHandleStyle = $derived(
+		`left: calc(${trimStartPct}% - ${(trimStartPct / 100) * HANDLE_W}px);`
+	);
+	let trimEndHandleStyle = $derived(
+		`left: calc(${trimEndPct}% - ${(trimEndPct / 100) * HANDLE_W}px);`
+	);
+	let trimSelectionBorderStyle = $derived(
+		`left: calc(${trimStartPct * 0.01} * (100% - ${HANDLE_W * 2}px) + ${HANDLE_W}px); width: calc(${trimEndPct * 0.01 - trimStartPct * 0.01} * (100% - ${HANDLE_W * 2}px));`
+	);
+
+	// Observe strip container width
+	$effect(() => {
+		if (!stripContainer) return;
+		const ro = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				stripWidth = entry.contentRect.width;
+			}
+		});
+		ro.observe(stripContainer);
+		return () => ro.disconnect();
+	});
+
+	// Generate filmstrip thumbnails when frames or width changes (debounced for width)
+	$effect(() => {
+		const frames = project.frames;
+		const w = project.width;
+		const h = project.height;
+		const canvasEl = stripCanvas;
+		const containerW = stripWidth;
+
+		if (!canvasEl || frames.length === 0 || w === 0 || h === 0 || containerW === 0) return;
+
+		const framesChanged = frames !== lastFramesRef;
+		const widthChanged = containerW !== lastStripWidth && lastStripWidth !== 0;
+
+		// If nothing changed, skip
+		if (!framesChanged && !widthChanged) return;
+
+		// Debounce width changes (300ms), but regenerate immediately for frame changes
+		if (widthChanged && !framesChanged) {
+			const timeoutId = setTimeout(() => {
+				untrack(() => {
+					lastStripWidth = containerW;
+					generateThumbnails(canvasEl, frames, w, h, containerW);
+				});
+			}, 300);
+			return () => clearTimeout(timeoutId);
+		}
+
+		// Regenerate immediately for frame changes
+		untrack(() => {
+			lastFramesRef = frames;
+			lastStripWidth = containerW;
+			generateThumbnails(canvasEl, frames, w, h, containerW);
+		});
+	});
+
+	function generateThumbnails(
+		canvasEl: HTMLCanvasElement,
+		frames: typeof project.frames,
+		srcW: number,
+		srcH: number,
+		containerW: number
+	) {
+		const tw = srcH > 0 ? Math.round((srcW / srcH) * STRIP_HEIGHT) : 36;
+		// How many thumbnails fit edge-to-edge
+		const count = Math.max(1, Math.ceil(containerW / tw));
+		const totalW = count * tw;
+
+		canvasEl.width = totalW;
+		canvasEl.height = STRIP_HEIGHT;
+
+		const ctx = canvasEl.getContext('2d');
+		if (!ctx) return;
+
+		ctx.fillStyle = '#18181b';
+		ctx.fillRect(0, 0, totalW, STRIP_HEIGHT);
+
+		// Sample frames evenly
+		const tmpCanvas = new OffscreenCanvas(srcW, srcH);
+		const tmpCtx = tmpCanvas.getContext('2d')!;
+
+		for (let i = 0; i < count; i++) {
+			const frameIdx = Math.min(
+				Math.round((i / Math.max(1, count - 1)) * (frames.length - 1)),
+				frames.length - 1
+			);
+			const frame = frames[frameIdx];
+			if (!frame) continue;
+
+			tmpCtx.putImageData(frame.imageData, 0, 0);
+			ctx.drawImage(tmpCanvas, i * tw, 0, tw, STRIP_HEIGHT);
+		}
 	}
 
-	function stepFrame(delta: number) {
-		const next = Math.max(0, Math.min(project.frameCount - 1, currentFrame + delta));
-		onFrameChange?.(next);
+	// --- Scrubbing ---
+	function frameFromPointerX(clientX: number): number {
+		if (!stripContainer) return 0;
+		const rect = stripContainer.getBoundingClientRect();
+		const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+		return Math.round(pct * (project.frameCount - 1));
 	}
 
+	function handleStripPointerDown(e: PointerEvent) {
+		// Don't interfere with trim handle drags
+		if (isDraggingTrimStart || isDraggingTrimEnd) return;
+		isDraggingScrub = true;
+		const frame = frameFromPointerX(e.clientX);
+		onFrameChange?.(frame);
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function handleStripPointerMove(e: PointerEvent) {
+		if (!isDraggingScrub) return;
+		const frame = frameFromPointerX(e.clientX);
+		onFrameChange?.(frame);
+	}
+
+	function handleStripPointerUp() {
+		isDraggingScrub = false;
+	}
+
+	// --- Trim handle dragging ---
+	function handleTrimStartDown(e: PointerEvent) {
+		e.stopPropagation();
+		isDraggingTrimStart = true;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function handleTrimStartMove(e: PointerEvent) {
+		if (!isDraggingTrimStart) return;
+		const frame = frameFromPointerX(e.clientX);
+		filmstrip.setTrimStart(Math.max(0, Math.min(frame, filmstrip.trimEnd - 1)));
+	}
+
+	function handleTrimStartUp() {
+		isDraggingTrimStart = false;
+	}
+
+	function handleTrimEndDown(e: PointerEvent) {
+		e.stopPropagation();
+		isDraggingTrimEnd = true;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function handleTrimEndMove(e: PointerEvent) {
+		if (!isDraggingTrimEnd) return;
+		const frame = frameFromPointerX(e.clientX);
+		filmstrip.setTrimEnd(Math.min(project.frameCount - 1, Math.max(frame, filmstrip.trimStart + 1)));
+	}
+
+	function handleTrimEndUp() {
+		isDraggingTrimEnd = false;
+	}
 </script>
 
-<div class="flex items-center gap-3 px-4 py-2 border-t border-zinc-800 bg-zinc-900 text-sm">
+<div class="flex items-center gap-2.5 px-3 py-2 border-t border-zinc-800 bg-zinc-900 text-sm">
+	<!-- Play / Pause -->
 	<button
 		onclick={onTogglePlay}
-		class="w-8 h-8 flex items-center justify-center rounded hover:bg-zinc-800 text-zinc-300 transition-colors"
+		class="w-8 h-8 flex items-center justify-center rounded-md text-zinc-300
+			   hover:bg-zinc-800 active:bg-zinc-700 transition-colors shrink-0"
 		title={isPlaying ? 'Pause' : 'Play'}
 	>
 		{#if isPlaying}
-			<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-				<rect x="6" y="4" width="4" height="16" />
-				<rect x="14" y="4" width="4" height="16" />
+			<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+				<rect x="5" y="3" width="5" height="18" rx="1" />
+				<rect x="14" y="3" width="5" height="18" rx="1" />
 			</svg>
 		{:else}
-			<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-				<polygon points="5,3 19,12 5,21" />
+			<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+				<path d="M6 3.5a1 1 0 0 1 1.5-.86l12 8.5a1 1 0 0 1 0 1.72l-12 8.5A1 1 0 0 1 6 20.5v-17z" />
 			</svg>
 		{/if}
 	</button>
 
-	<button
-		onclick={() => stepFrame(-1)}
-		class="w-6 h-6 flex items-center justify-center rounded hover:bg-zinc-800 text-zinc-400 transition-colors"
-		title="Previous frame"
+	<!-- Filmstrip -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		bind:this={stripContainer}
+		class="flex-1 relative h-12 rounded-lg overflow-hidden cursor-col-resize select-none
+			   ring-1 ring-zinc-700/60"
+		onpointerdown={handleStripPointerDown}
+		onpointermove={handleStripPointerMove}
+		onpointerup={handleStripPointerUp}
+		onpointercancel={handleStripPointerUp}
 	>
-		<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-			<polygon points="15,3 5,12 15,21" />
-		</svg>
-	</button>
+		<!-- Thumbnail canvas -->
+		<canvas
+			bind:this={stripCanvas}
+			class="absolute inset-0 w-full h-full"
+			style="image-rendering: auto;"
+		></canvas>
 
-	<input
-		type="range"
-		min="0"
-		max={Math.max(0, project.frameCount - 1)}
-		value={currentFrame}
-		oninput={handleScrub}
-		class="flex-1 h-1 accent-green-500"
-	/>
+		{#if filmstrip.trimMode}
+			<!-- Dim overlay BEFORE trim start -->
+			<div
+				class="absolute inset-y-0 left-0 bg-black/70 pointer-events-none z-10"
+				style="width: {trimStartPct}%;"
+			></div>
 
-	<button
-		onclick={() => stepFrame(1)}
-		class="w-6 h-6 flex items-center justify-center rounded hover:bg-zinc-800 text-zinc-400 transition-colors"
-		title="Next frame"
-	>
-		<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-			<polygon points="9,3 19,12 9,21" />
-		</svg>
-	</button>
+			<!-- Dim overlay AFTER trim end -->
+			<div
+				class="absolute inset-y-0 right-0 bg-black/70 pointer-events-none z-10"
+				style="width: {100 - trimEndPct}%;"
+			></div>
 
-	<span class="text-zinc-500 tabular-nums min-w-[5rem] text-right">
-		{currentFrame + 1} / {project.frameCount}
+			<!-- Gold selection border (top + bottom bars) -->
+			<div
+				class="absolute top-0 h-[2.5px] bg-amber-400 pointer-events-none z-20"
+				style={trimSelectionBorderStyle}
+			></div>
+			<div
+				class="absolute bottom-0 h-[2.5px] bg-amber-400 pointer-events-none z-20"
+				style={trimSelectionBorderStyle}
+			></div>
+
+			<!-- Trim start handle -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="absolute inset-y-0 z-30 w-4 cursor-ew-resize flex items-center justify-center
+					   bg-amber-400 rounded-l-md
+					   hover:bg-amber-300 active:bg-amber-300 transition-colors
+					   shadow-[2px_0_8px_rgba(0,0,0,0.3)]"
+				style={trimStartHandleStyle}
+				onpointerdown={handleTrimStartDown}
+				onpointermove={handleTrimStartMove}
+				onpointerup={handleTrimStartUp}
+				onpointercancel={handleTrimStartUp}
+			>
+				<svg class="w-2 h-4 text-amber-900/60" viewBox="0 0 6 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+					<line x1="4" y1="4" x2="2" y2="8" />
+					<line x1="2" y1="8" x2="4" y2="12" />
+				</svg>
+			</div>
+
+			<!-- Trim end handle -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="absolute inset-y-0 z-50 w-4 cursor-ew-resize flex items-center justify-center
+					   bg-amber-400 rounded-r-md
+					   hover:bg-amber-300 active:bg-amber-300 transition-colors
+					   shadow-[-2px_0_8px_rgba(0,0,0,0.3)]"
+				style={trimEndHandleStyle}
+				onpointerdown={handleTrimEndDown}
+				onpointermove={handleTrimEndMove}
+				onpointerup={handleTrimEndUp}
+				onpointercancel={handleTrimEndUp}
+			>
+				<svg class="w-2 h-4 text-amber-900/60" viewBox="0 0 6 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+					<line x1="2" y1="4" x2="4" y2="8" />
+					<line x1="4" y1="8" x2="2" y2="12" />
+				</svg>
+			</div>
+		{/if}
+
+		<!-- Playhead -->
+		<div
+			class="absolute top-0 bottom-0 w-[3px] -translate-x-1/2 z-40 pointer-events-none
+				   bg-white shadow-[0_0_6px_rgba(255,255,255,0.35)]"
+			style="left: {playheadPct}%; transition: left {isDraggingScrub ? '0ms' : '75ms'};"
+		>
+			<div class="absolute -top-0.5 left-1/2 -translate-x-1/2 w-2.5 h-1 rounded-b-sm bg-white"></div>
+			<div class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-2.5 h-1 rounded-t-sm bg-white"></div>
+		</div>
+	</div>
+
+	<!-- Frame counter -->
+	<span class="text-zinc-500 tabular-nums text-xs min-w-[4.5rem] text-right shrink-0 font-mono tracking-tight">
+		{String(currentFrame + 1).padStart(String(project.frameCount).length, '\u2007')}<span class="text-zinc-600"> / </span>{project.frameCount}
 	</span>
 </div>

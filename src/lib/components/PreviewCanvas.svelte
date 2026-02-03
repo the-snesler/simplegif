@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { project } from '$lib/stores/project.svelte';
+	import { filmstrip } from '$lib/stores/filmstrip.svelte';
 	import { untrack } from 'svelte';
 
 	let canvas = $state<HTMLCanvasElement | null>(null);
@@ -53,7 +54,14 @@
 		const delay = frame?.delay || 100;
 
 		if (now - lastFrameTime >= delay) {
-			currentFrame = (currentFrame + 1) % project.frameCount;
+			// When trim mode is active, loop within trim bounds
+			if (filmstrip.trimMode) {
+				const start = filmstrip.trimStart;
+				const end = filmstrip.trimEnd;
+				currentFrame = currentFrame >= end ? start : currentFrame + 1;
+			} else {
+				currentFrame = (currentFrame + 1) % project.frameCount;
+			}
 			renderFrame();
 			lastFrameTime = now;
 		}

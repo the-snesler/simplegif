@@ -1,25 +1,26 @@
 <script lang="ts">
 	import ToolPanel from '$lib/components/ToolPanel.svelte';
-	import SliderInput from '$lib/components/controls/SliderInput.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
+	import { filmstrip } from '$lib/stores/filmstrip.svelte';
 	import { trimFrames } from '$lib/processing/transforms/trim';
 
-	let startFrame = $state(0);
-	let endFrame = $state(0);
-
+	// Enable trim mode on mount, disable on unmount
 	$effect(() => {
 		if (project.isLoaded) {
-			startFrame = 0;
-			endFrame = project.frameCount - 1;
+			filmstrip.enableTrim(0, project.frameCount - 1);
 		}
+		return () => {
+			filmstrip.disableTrim();
+		};
 	});
 
 	async function applyTrim() {
 		processing.start('Trimming frames...');
 		try {
-			const newFrames = trimFrames(project.frames, startFrame, endFrame);
+			const newFrames = trimFrames(project.frames, filmstrip.trimStart, filmstrip.trimEnd);
 			project.updateFrames(newFrames);
+			filmstrip.enableTrim(0, newFrames.length - 1);
 		} catch (err) {
 			console.error('Failed to trim:', err);
 		} finally {
@@ -27,7 +28,7 @@
 		}
 	}
 
-	let keptFrames = $derived(Math.max(0, endFrame - startFrame + 1));
+	let keptFrames = $derived(Math.max(0, filmstrip.trimEnd - filmstrip.trimStart + 1));
 </script>
 
 <svelte:head>
@@ -40,22 +41,23 @@
 
 <ToolPanel
 	title="Trim"
-	description="Remove frames from the start and/or end."
+	description="Drag the gold handles on the filmstrip to select the range of frames to keep."
 	onApply={applyTrim}
 >
-	<SliderInput
-		label="Start Frame"
-		bind:value={startFrame}
-		min={0}
-		max={Math.max(0, project.frameCount - 1)}
-	/>
-	<SliderInput
-		label="End Frame"
-		bind:value={endFrame}
-		min={0}
-		max={Math.max(0, project.frameCount - 1)}
-	/>
-	<p class="text-xs text-zinc-500">
-		Keeping {keptFrames} of {project.frameCount} frames
-	</p>
+	{#if project.isLoaded}
+		<div class="space-y-2 text-sm">
+			<div class="flex justify-between text-zinc-400">
+				<span>Start frame</span>
+				<span class="tabular-nums text-zinc-300">{filmstrip.trimStart + 1}</span>
+			</div>
+			<div class="flex justify-between text-zinc-400">
+				<span>End frame</span>
+				<span class="tabular-nums text-zinc-300">{filmstrip.trimEnd + 1}</span>
+			</div>
+			<div class="pt-1 border-t border-zinc-800 flex justify-between text-zinc-400">
+				<span>Keeping</span>
+				<span class="tabular-nums text-zinc-300">{keptFrames} of {project.frameCount} frames</span>
+			</div>
+		</div>
+	{/if}
 </ToolPanel>
