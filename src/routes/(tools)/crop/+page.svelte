@@ -3,8 +3,14 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { cropStore } from '$lib/stores/crop.svelte';
+	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { cropFrames } from '$lib/processing/transforms/crop';
 	import { onMount } from 'svelte';
+
+	$effect(() => {
+		applyAction.set(applyCrop);
+		return () => applyAction.clear();
+	});
 
 	onMount(() => {
 		if (project.isLoaded) {
@@ -50,7 +56,7 @@
 	/>
 </svelte:head>
 
-<ToolPanel title="Crop" description="Drag the handles on the preview to select your crop area." onApply={applyCrop}>
+<ToolPanel title="Crop" description="Drag the handles on the preview to select your crop area.">
 	<div class="space-y-2">
 		<div class="flex items-center justify-between text-xs text-zinc-400">
 			<span>Selection</span>

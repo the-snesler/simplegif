@@ -4,10 +4,16 @@
 	import SliderInput from '$lib/components/controls/SliderInput.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
+	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { optimizeFrames } from '$lib/processing/transforms/optimize';
 	import { estimateGifSize } from '$lib/processing/encoder';
 	import { formatFileSize } from '$lib/utils/file';
 	import type { OptimizeMethod, OptimizeOptions } from '$lib/types';
+
+	$effect(() => {
+		applyAction.set(handleApply);
+		return () => applyAction.clear();
+	});
 
 	let method = $state<OptimizeMethod>('lossy');
 	let maxColors = $state(128);
@@ -156,7 +162,7 @@
 	/>
 </svelte:head>
 
-<ToolPanel title="Optimize" description="Reduce GIF file size." onApply={handleApply} applyLabel="Apply">
+<ToolPanel title="Optimize" description="Reduce GIF file size.">
 	<!-- Method selector -->
 	<div class="space-y-1.5">
 		<span class="text-xs text-zinc-400">Method</span>

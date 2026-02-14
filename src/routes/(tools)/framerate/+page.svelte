@@ -3,7 +3,13 @@
 	import SliderInput from '$lib/components/controls/SliderInput.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
+	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { changeFrameRate } from '$lib/processing/transforms/framerate';
+
+	$effect(() => {
+		applyAction.set(applyFrameRate);
+		return () => applyAction.clear();
+	});
 
 	let targetFps = $state(10);
 
@@ -40,7 +46,6 @@
 <ToolPanel
 	title="Frame Rate"
 	description="Adjust the playback speed of your GIF."
-	onApply={applyFrameRate}
 >
 	<SliderInput label="Target FPS" bind:value={targetFps} min={1} max={50} suffix=" fps" />
 	<p class="text-xs text-zinc-500">

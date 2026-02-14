@@ -2,8 +2,14 @@
 	import ToolPanel from '$lib/components/ToolPanel.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
+	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { rotateFrames } from '$lib/processing/transforms/rotate';
 	import type { RotateOptions } from '$lib/types';
+
+	$effect(() => {
+		applyAction.set(applyRotate);
+		return () => applyAction.clear();
+	});
 
 	let degrees = $state<0 | 90 | 180 | 270>(0);
 	let flipH = $state(false);
@@ -40,7 +46,6 @@
 <ToolPanel
 	title="Rotate / Flip"
 	description="Rotate or flip every frame."
-	onApply={applyRotate}
 >
 	<div>
 		<span class="text-xs text-zinc-400 block mb-2">Rotation</span>

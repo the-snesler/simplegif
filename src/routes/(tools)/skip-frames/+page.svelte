@@ -3,7 +3,13 @@
 	import SliderInput from '$lib/components/controls/SliderInput.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
+	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { skipFrames } from '$lib/processing/transforms/skip-frames';
+
+	$effect(() => {
+		applyAction.set(applySkip);
+		return () => applyAction.clear();
+	});
 
 	let keepEveryN = $state(2);
 
@@ -33,7 +39,6 @@
 <ToolPanel
 	title="Skip Frames"
 	description="Keep every Nth frame to reduce file size."
-	onApply={applySkip}
 >
 	<SliderInput label="Keep every" bind:value={keepEveryN} min={2} max={10} suffix=" frames" />
 	<p class="text-xs text-zinc-500">

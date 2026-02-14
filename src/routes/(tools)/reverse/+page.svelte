@@ -2,7 +2,13 @@
 	import ToolPanel from '$lib/components/ToolPanel.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
+	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { reverseFrames } from '$lib/processing/transforms/reverse';
+
+	$effect(() => {
+		applyAction.set(applyReverse, 'Reverse Frames');
+		return () => applyAction.clear();
+	});
 
 	async function applyReverse() {
 		processing.start('Reversing frames...');
@@ -28,8 +34,6 @@
 <ToolPanel
 	title="Reverse"
 	description="Reverse the frame order of your GIF."
-	onApply={applyReverse}
-	applyLabel="Reverse Frames"
 >
 	{#if project.isLoaded}
 		<p class="text-sm text-zinc-400">

@@ -3,7 +3,13 @@
 	import NumberInput from '$lib/components/controls/NumberInput.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
+	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { resizeFrames } from '$lib/processing/transforms/resize';
+
+	$effect(() => {
+		applyAction.set(applyResize);
+		return () => applyAction.clear();
+	});
 
 	let targetWidth = $state(project.width || 320);
 	let targetHeight = $state(project.height || 240);
@@ -54,7 +60,7 @@
 	/>
 </svelte:head>
 
-<ToolPanel title="Resize" description="Change the resolution of your GIF." onApply={applyResize}>
+<ToolPanel title="Resize" description="Change the resolution of your GIF.">
 	<div class="grid grid-cols-2 gap-3">
 		<div>
 			<NumberInput label="Width" bind:value={targetWidth} min={1} max={4096} />

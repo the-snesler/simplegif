@@ -3,6 +3,7 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { filmstrip } from '$lib/stores/filmstrip.svelte';
+	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { trimFrames } from '$lib/processing/transforms/trim';
 
 	// Enable trim mode on mount, disable on unmount
@@ -13,6 +14,11 @@
 		return () => {
 			filmstrip.disableTrim();
 		};
+	});
+
+	$effect(() => {
+		applyAction.set(applyTrim);
+		return () => applyAction.clear();
 	});
 
 	async function applyTrim() {
@@ -42,7 +48,6 @@
 <ToolPanel
 	title="Trim"
 	description="Drag the gold handles on the filmstrip to select the range of frames to keep."
-	onApply={applyTrim}
 >
 	{#if project.isLoaded}
 		<div class="space-y-2 text-sm">

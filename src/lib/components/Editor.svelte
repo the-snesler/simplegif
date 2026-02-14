@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { project } from '$lib/stores/project.svelte';
+	import { processing } from '$lib/stores/processing.svelte';
+	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import DropZone from './DropZone.svelte';
 	import PreviewCanvas from './PreviewCanvas.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
@@ -50,7 +52,16 @@
 
 		{@render children?.()}
 
-		<div class="px-4 py-3 flex justify-end">
+		<div class="px-4 py-3 flex justify-end gap-2">
+			{#if applyAction.onApply}
+				<button
+					onclick={applyAction.onApply}
+					disabled={processing.isProcessing}
+					class="px-4 py-2 bg-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+				>
+					{applyAction.label}
+				</button>
+			{/if}
 			<DownloadButton />
 		</div>
 	</div>
