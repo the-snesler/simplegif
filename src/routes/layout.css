@@ -19,3 +19,11 @@
   --color-accent: #a855f7;
   --color-accent-hover: #9333ea;
 }
+
+*, *:before, *:after {
+  box-sizing: border-box;
+}
+
+button {
+  cursor: pointer;
+}

@@ -114,7 +114,7 @@
 	});
 </script>
 
-<div class="flex-1 flex items-center justify-center bg-zinc-950 min-h-0 p-4 relative">
+<div class="flex-1 flex items-center justify-center bg-zinc-950 min-h-48 p-4 relative">
 	<div class="relative max-w-full max-h-full" style="aspect-ratio: {project.width}/{project.height};">
 		<canvas
 			bind:this={canvas}

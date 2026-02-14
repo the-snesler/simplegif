@@ -32,7 +32,7 @@
 <button
 	onclick={handleDownload}
 	disabled={!project.isLoaded || processing.isProcessing}
-	class="px-4 py-2 bg-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+	class="px-4 py-2 leading-0 border-2 border-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
 >
 	Download GIF
 </button>

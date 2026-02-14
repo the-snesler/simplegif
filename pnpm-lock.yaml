@@ -30,6 +30,9 @@ importers:
       '@iconify-json/dinkie-icons':
         specifier: ^1.2.0
         version: 1.2.0
+      '@iconify-json/pixelarticons':
+        specifier: ^1.2.2
+        version: 1.2.2
       '@playwright/test':
         specifier: ^1.58.0
         version: 1.58.1
@@ -566,6 +569,9 @@ packages:
 
   '@iconify-json/dinkie-icons@1.2.0':
     resolution: {integrity: sha512-/RSAjK6twyEOKfW9FddZDP+EPMeSIocb4Y4Zq2Y2IbqUxYmNHqXtxidVioBzpv+a3JeiQ61ARlRKtCQ0BqSGpA==}
+
+  '@iconify-json/pixelarticons@1.2.2':
+    resolution: {integrity: sha512-BAAzqfT0XKUc/a8MgTxOH1aSm44InW9abUIQ1qu5dBntKlYuJP/dN0JfK4WEpUS78T/7HP8w9v1nSQjENLyjFg==}
 
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
@@ -2423,6 +2429,10 @@ snapshots:
   '@humanwhocodes/retry@0.4.3': {}
 
   '@iconify-json/dinkie-icons@1.2.0':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/pixelarticons@1.2.2':
     dependencies:
       '@iconify/types': 2.0.0
 

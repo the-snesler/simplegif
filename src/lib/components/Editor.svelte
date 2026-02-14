@@ -3,10 +3,13 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
+	import { history } from '$lib/stores/history.svelte';
 	import DropZone from './DropZone.svelte';
 	import PreviewCanvas from './PreviewCanvas.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
 	import DownloadButton from './DownloadButton.svelte';
+	import PIUndo from '~icons/pixelarticons/undo';
+	import PIRedo from '~icons/pixelarticons/redo';
 
 	let { children }: { children?: Snippet } = $props();
 
@@ -22,6 +25,12 @@
 	function handleFrameChange(frame: number) {
 		preview?.setCurrentFrame(frame);
 		currentFrame = frame;
+	}
+
+	async function handleApply() {
+		if (!applyAction.onApply) return;
+		history.snapshot();
+		await applyAction.onApply();
 	}
 
 	// Sync state from preview on animation
@@ -40,29 +49,47 @@
 {#if !project.isLoaded}
 	<DropZone />
 {:else}
-	<div class="flex-1 flex flex-col min-h-0">
-		<PreviewCanvas bind:this={preview} />
+	<div class="overflow-y-scroll h-full flex flex-1 flex-col">
+		<div class="flex min-h-96 flex-1 flex-col">
+			<PreviewCanvas bind:this={preview} />
 
-		<PlaybackControls
-			{currentFrame}
-			{isPlaying}
-			onTogglePlay={handleTogglePlay}
-			onFrameChange={handleFrameChange}
-		/>
+			<PlaybackControls
+				{currentFrame}
+				{isPlaying}
+				onTogglePlay={handleTogglePlay}
+				onFrameChange={handleFrameChange}
+			/>
 
-		{@render children?.()}
+			{@render children?.()}
 
-		<div class="px-4 py-3 flex justify-end gap-2">
-			{#if applyAction.onApply}
+			<div class="flex justify-end gap-2 px-4 py-3">
 				<button
-					onclick={applyAction.onApply}
-					disabled={processing.isProcessing}
-					class="px-4 py-2 bg-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+					onclick={() => history.undo()}
+					disabled={!history.canUndo || processing.isProcessing}
+					class="inline-flex size-9 items-center justify-center rounded-lg bg-zinc-800 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-30"
+					title="Undo"
 				>
-					{applyAction.label}
+					<PIUndo class="size-4" />
 				</button>
-			{/if}
-			<DownloadButton />
+				<button
+					onclick={() => history.redo()}
+					disabled={!history.canRedo || processing.isProcessing}
+					class="inline-flex size-9 items-center justify-center rounded-lg bg-zinc-800 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-30"
+					title="Redo"
+				>
+					<PIRedo class="size-4" />
+				</button>
+				{#if applyAction.onApply}
+					<button
+						onclick={handleApply}
+						disabled={processing.isProcessing}
+						class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium transition-colors hover:bg-green-600 disabled:cursor-not-allowed disabled:opacity-50"
+					>
+						{applyAction.label}
+					</button>
+				{/if}
+				<DownloadButton />
+			</div>
 		</div>
 	</div>
 {/if}

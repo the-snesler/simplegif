@@ -13,7 +13,7 @@
 	} = $props();
 </script>
 
-<div class="border-t border-zinc-800 bg-zinc-900">
+<div class="border-t border-b border-zinc-800 bg-zinc-950">
 	<div class="px-4 py-3 border-b border-zinc-800">
 		<h2 class="font-medium text-sm">{title}</h2>
 		{#if description}
