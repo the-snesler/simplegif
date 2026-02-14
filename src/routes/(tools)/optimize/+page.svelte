@@ -1,7 +1,7 @@
 <script lang="ts">
+	/* eslint-disable @typescript-eslint/no-unused-expressions */
 	import ToolPanel from '$lib/components/ToolPanel.svelte';
 	import SliderInput from '$lib/components/controls/SliderInput.svelte';
-	import DownloadButton from '$lib/components/DownloadButton.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { optimizeFrames } from '$lib/processing/transforms/optimize';
@@ -18,7 +18,7 @@
 	let estimatedSize = $state<number | null>(null);
 	let originalSize = $state<number | null>(null);
 	let isEstimating = $state(false);
-	let estimateTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+	let estimateTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const methods: { id: OptimizeMethod; label: string; description: string }[] = [
 		{
@@ -118,7 +118,6 @@
 
 	function scheduleEstimate() {
 		if (estimateTimer) clearTimeout(estimateTimer);
-		estimatedSize = null;
 		estimateTimer = setTimeout(runEstimate, 400);
 	}
 
@@ -161,8 +160,8 @@
 	<!-- Method selector -->
 	<div class="space-y-1.5">
 		<span class="text-xs text-zinc-400">Method</span>
-		<div class="grid gap-1.5">
-			{#each methods as m}
+		<div class="grid gap-1.5 grid-cols-3">
+			{#each methods as m (m.id)}
 				<button
 					onclick={() => (method = m.id)}
 					class="text-left px-3 py-2 rounded-lg border text-sm transition-colors {method === m.id
@@ -255,13 +254,6 @@
 			{:else}
 				<p class="text-xs text-zinc-500">Adjust settings to see estimate</p>
 			{/if}
-		</div>
-
-		<div class="pt-1">
-			<DownloadButton
-				maxColors={encodeMaxColors()}
-				transparencyOptimized={needsTransparencyEncoding(method)}
-			/>
 		</div>
 	{/if}
 </ToolPanel>
