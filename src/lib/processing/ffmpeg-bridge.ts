@@ -10,7 +10,9 @@ export async function videoToFrames(
 	const ffmpeg = await ffmpegStore.load();
 
 	ffmpeg.on('progress', ({ progress }) => {
-		onProgress?.(Math.min(progress * 100, 99));
+		if (progress > 0.01 && progress < 0.99) {
+			onProgress?.(progress * 100);
+		}
 	});
 
 	await ffmpeg.writeFile(fileName, fileData);

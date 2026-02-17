@@ -12,7 +12,7 @@
 			<p class="text-sm text-zinc-300 mb-3">{processing.statusText || 'Processing...'}</p>
 			<div class="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
 				<div
-					class="bg-green-500 h-full rounded-full transition-all duration-200"
+					class="bg-green-500 h-full rounded-full transition-all duration-500 ease-out"
 					style="width: {processing.progress}%"
 				></div>
 			</div>

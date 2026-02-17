@@ -11,6 +11,7 @@
 	import DNZoomIn from '~icons/dinkie-icons/zoom-in';
 	import DNMenu from '~icons/dinkie-icons/menu-small';
 	import DNArrowsMaximize from '~icons/dinkie-icons/arrows-maximize';
+	import DNFire from '~icons/dinkie-icons/fire';
 	import NavItem from './NavItem.svelte';
 	import OtherSites from './OtherSites.svelte';
 	import { project } from '$lib/stores/project.svelte';
@@ -53,6 +54,15 @@
 				{#if project.sourceFile}
 					<span>{formatFileSize(project.sourceFile.size)}</span>
 				{/if}
+			</div>
+			<div class="px-4 py-3">
+				<button
+					onclick={() => project.reset()}
+					class="w-full px-3 py-2 text-sm group text-zinc-400 hover:text-white hover:bg-red-800 rounded-lg transition-colors border border-zinc-800 hover:border-red-700 flex items-center justify-center"
+				>
+					<DNFire class="inline-block mr-2" />
+					Clear File
+				</button>
 			</div>
 		</div>
 	{/if}
@@ -104,15 +114,4 @@
 			{#snippet icon()}<DNZoomIn class="w-4 h-4" />{/snippet}
 		</NavItem>
 	</nav>
-
-	{#if project.isLoaded}
-		<div class="px-4 py-3 border-t border-zinc-800">
-			<button
-				onclick={() => project.reset()}
-				class="w-full px-3 py-2 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
-			>
-				Clear File
-			</button>
-		</div>
-	{/if}
 </aside>
