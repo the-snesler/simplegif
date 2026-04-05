@@ -14,7 +14,6 @@
 	import DNFire from '~icons/dinkie-icons/fire';
 	import DNBlackCrossSquare from '~icons/dinkie-icons/black-cross-square';
 	import NavItem from './NavItem.svelte';
-	import OtherSites from './OtherSites.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { formatFileSize } from '$lib/utils/file';
 
@@ -25,7 +24,7 @@
 	<div
 		class="px-6 py-4 flex items-center justify-between border-b border-zinc-800 h-18 from-green-950 to-zinc-900 bg-linear-to-br"
 	>
-		<button popoverTarget="other-sites-popover" class="flex items-center gap-3 text-left">
+		<div class="flex items-center gap-3 text-left">
 			<div
 				class="w-8 h-8 rounded-lg bg-green-900 border border-green-700 flex items-center justify-center"
 			>
@@ -35,15 +34,8 @@
 				<h1 class="font-semibold text-sm text-white">SimpleGIF</h1>
 				<p class="text-xs text-zinc-500">Local GIF toolkit</p>
 			</div>
-		</button>
+		</div>
 		<div class="flex items-center gap-1">
-			<button
-				popoverTarget="other-sites-popover"
-				class="p-2 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
-				aria-label="Other sites"
-			>
-				<DNMenu class="w-4 h-4 text-zinc-400" />
-			</button>
 			<button
 				popoverTarget={SIDEBAR_POPOVER_ID}
 				popoverTargetAction="hide"
@@ -54,7 +46,6 @@
 			</button>
 		</div>
 	</div>
-	<OtherSites />
 
 	{#if project.isLoaded}
 		<div class="px-4 py-3 border-b border-zinc-800 text-xs text-zinc-400 space-y-1">

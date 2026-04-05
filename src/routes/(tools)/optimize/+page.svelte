@@ -1,13 +1,10 @@
 <script lang="ts">
-	/* eslint-disable @typescript-eslint/no-unused-expressions */
 	import ToolPanel from '$lib/components/ToolPanel.svelte';
 	import SliderInput from '$lib/components/controls/SliderInput.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { optimizeFrames } from '$lib/processing/transforms/optimize';
-	import { estimateGifSize } from '$lib/processing/encoder';
-	import { formatFileSize } from '$lib/utils/file';
 	import type { OptimizeMethod, OptimizeOptions } from '$lib/types';
 
 	$effect(() => {
@@ -20,11 +17,6 @@
 	let lossyLevel = $state(80);
 	let dropEveryN = $state(2);
 	let fuzzFactor = $state(10);
-
-	let estimatedSize = $state<number | null>(null);
-	let originalSize = $state<number | null>(null);
-	let isEstimating = $state(false);
-	let estimateTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const methods: { id: OptimizeMethod; label: string; description: string }[] = [
 		{
@@ -69,17 +61,6 @@
 		return { method, maxColors, lossyLevel, dropEveryN, fuzzFactor };
 	}
 
-	/** Whether this method needs transparency-aware encoding. */
-	function needsTransparencyEncoding(m: OptimizeMethod): boolean {
-		return m === 'transparency';
-	}
-
-	/** Encode max colors to pass to the encoder based on current method. */
-	function encodeMaxColors(): number {
-		if (method === 'color-reduction' || method === 'lossy') return maxColors;
-		return 256;
-	}
-
 	async function handleApply() {
 		if (!project.isLoaded) return;
 		processing.start('Optimizing...');
@@ -95,61 +76,6 @@
 			processing.finish();
 		}
 	}
-
-	async function runEstimate() {
-		if (!project.isLoaded) return;
-		isEstimating = true;
-		estimatedSize = null;
-
-		try {
-			// Get original size first
-			if (originalSize === null) {
-				originalSize = await estimateGifSize(project.frames, project.width, project.height);
-			}
-
-			// Apply transform to a copy of frames, then estimate
-			const opts = buildOptions();
-			const optimized = optimizeFrames([...project.frames], opts);
-
-			estimatedSize = await estimateGifSize(optimized, project.width, project.height, {
-				maxColors: encodeMaxColors(),
-				transparencyOptimized: needsTransparencyEncoding(method)
-			});
-		} catch {
-			estimatedSize = null;
-		} finally {
-			isEstimating = false;
-		}
-	}
-
-	function scheduleEstimate() {
-		if (estimateTimer) clearTimeout(estimateTimer);
-		estimateTimer = setTimeout(runEstimate, 400);
-	}
-
-	// Re-estimate when settings change
-	$effect(() => {
-		// Read reactive values to subscribe
-		method;
-		maxColors;
-		lossyLevel;
-		dropEveryN;
-		fuzzFactor;
-
-		if (project.isLoaded) {
-			scheduleEstimate();
-		}
-
-		return () => {
-			if (estimateTimer) clearTimeout(estimateTimer);
-		};
-	});
-
-	let reductionPct = $derived(
-		originalSize && estimatedSize
-			? Math.round(((originalSize - estimatedSize) / originalSize) * 100)
-			: null
-	);
 
 	let selectedMethod = $derived(methods.find((m) => m.id === method)!);
 </script>
@@ -213,53 +139,6 @@
 		<p class="text-xs text-zinc-500">
 			Higher fuzz = more pixels treated as unchanged. Best for screen recordings and static backgrounds.
 		</p>
-	{:else if method === 'coalesce'}
-		<p class="text-xs text-zinc-500">
-			No settings needed. Each frame will become a full standalone image.
-		</p>
-	{/if}
+{/if}
 
-	<!-- Size comparison -->
-	{#if project.isLoaded}
-		<div class="rounded-lg border border-zinc-700 bg-zinc-800/50 p-3 space-y-2">
-			<span class="text-xs font-medium text-zinc-300">Estimated File Size</span>
-
-			{#if isEstimating}
-				<div class="flex items-center gap-2 text-xs text-zinc-500">
-					<span class="inline-block w-3 h-3 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin"></span>
-					Calculating...
-				</div>
-			{:else if originalSize !== null && estimatedSize !== null}
-				<div class="space-y-1">
-					<div class="flex justify-between text-xs">
-						<span class="text-zinc-400">Current</span>
-						<span class="text-zinc-300 tabular-nums">{formatFileSize(originalSize)}</span>
-					</div>
-					<div class="flex justify-between text-xs">
-						<span class="text-zinc-400">Estimated</span>
-						<span class="text-zinc-300 tabular-nums">{formatFileSize(estimatedSize)}</span>
-					</div>
-					<div class="h-px bg-zinc-700"></div>
-					<div class="flex justify-between text-xs">
-						<span class="text-zinc-400">Reduction</span>
-						<span
-							class="font-medium tabular-nums {reductionPct !== null && reductionPct > 0
-								? 'text-green-400'
-								: reductionPct !== null && reductionPct < 0
-									? 'text-red-400'
-									: 'text-zinc-300'}"
-						>
-							{#if reductionPct !== null}
-								{reductionPct > 0 ? '-' : '+'}{Math.abs(reductionPct)}%
-							{:else}
-								—
-							{/if}
-						</span>
-					</div>
-				</div>
-			{:else}
-				<p class="text-xs text-zinc-500">Adjust settings to see estimate</p>
-			{/if}
-		</div>
-	{/if}
 </ToolPanel>
