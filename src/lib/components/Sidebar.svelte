@@ -12,13 +12,16 @@
 	import DNMenu from '~icons/dinkie-icons/menu-small';
 	import DNArrowsMaximize from '~icons/dinkie-icons/arrows-maximize';
 	import DNFire from '~icons/dinkie-icons/fire';
+	import DNBlackCrossSquare from '~icons/dinkie-icons/black-cross-square';
 	import NavItem from './NavItem.svelte';
 	import OtherSites from './OtherSites.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { formatFileSize } from '$lib/utils/file';
+
+	const SIDEBAR_POPOVER_ID = 'sidebar-popover';
 </script>
 
-<aside class="w-80 shrink-0 border-r border-zinc-800 bg-zinc-900 flex flex-col h-full">
+{#snippet sidebarContent()}
 	<div
 		class="px-6 py-4 flex items-center justify-between border-b border-zinc-800 h-18 from-green-950 to-zinc-900 bg-linear-to-br"
 	>
@@ -29,7 +32,7 @@
 				<DNCamera class="text-green-400" />
 			</div>
 			<div>
-				<h1 class="font-semibold text-sm">SimpleGIF</h1>
+				<h1 class="font-semibold text-sm text-white">SimpleGIF</h1>
 				<p class="text-xs text-zinc-500">Local GIF toolkit</p>
 			</div>
 		</button>
@@ -40,6 +43,14 @@
 				aria-label="Other sites"
 			>
 				<DNMenu class="w-4 h-4 text-zinc-400" />
+			</button>
+			<button
+				popoverTarget={SIDEBAR_POPOVER_ID}
+				popoverTargetAction="hide"
+				class="p-2 rounded-lg hover:bg-zinc-800 transition-colors md:hidden"
+				aria-label="Close sidebar"
+			>
+				<DNBlackCrossSquare class="w-4 h-4 text-zinc-400" />
 			</button>
 		</div>
 	</div>
@@ -114,4 +125,18 @@
 			{#snippet icon()}<DNZoomIn class="w-4 h-4" />{/snippet}
 		</NavItem>
 	</nav>
+{/snippet}
+
+<!-- Desktop sidebar -->
+<aside class="hidden md:flex w-80 shrink-0 border-r border-zinc-800 bg-zinc-900 flex-col h-full">
+	{@render sidebarContent()}
+</aside>
+
+<!-- Mobile sidebar popover -->
+<aside
+	id={SIDEBAR_POPOVER_ID}
+	popover="auto"
+	class="sidebar-popover md:hidden m-0 p-0 w-80 max-w-[85vw] h-full max-h-full border-0 border-r border-zinc-800 bg-zinc-900 flex flex-col"
+>
+	{@render sidebarContent()}
 </aside>

@@ -62,7 +62,7 @@
 
 			{@render children?.()}
 
-			<div class="flex justify-end gap-2 px-4 py-3">
+			<div class="flex justify-end gap-2 px-4 py-3 bg-zinc-950">
 				<button
 					onclick={() => history.undo()}
 					disabled={!history.canUndo || processing.isProcessing}
