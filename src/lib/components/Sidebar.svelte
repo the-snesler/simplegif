@@ -9,7 +9,6 @@
 	import DNShuffleArrows from '~icons/dinkie-icons/shuffle-arrows';
 	import DNAdjustments from '~icons/dinkie-icons/adjustments';
 	import DNZoomIn from '~icons/dinkie-icons/zoom-in';
-	import DNMenu from '~icons/dinkie-icons/menu-small';
 	import DNArrowsMaximize from '~icons/dinkie-icons/arrows-maximize';
 	import DNFire from '~icons/dinkie-icons/fire';
 	import DNBlackCrossSquare from '~icons/dinkie-icons/black-cross-square';

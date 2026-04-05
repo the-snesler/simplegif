@@ -44,6 +44,11 @@
 
 		return () => clearInterval(interval);
 	});
+
+	$effect(() => {
+		applyAction.setPausePreview(() => preview?.pause());
+		return () => applyAction.setPausePreview(null);
+	});
 </script>
 
 {#if !project.isLoaded}

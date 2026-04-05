@@ -108,20 +108,24 @@
 	}
 
 	async function handleGifsicle() {
+		applyAction.onPausePreview?.();
 		processing.start('Encoding GIF for gifsicle...');
 		try {
 			// First encode current frames to a GIF blob
 			const inputBlob = await encodeGif(project.frames, project.width, project.height);
+			beforeSize = inputBlob.size;
+			afterSize = null;
 
-			processing.start('Running gifsicle...');
+			processing.update(25, 'Running gifsicle...');
 			const opts = buildGifsicleOptions();
 			const outputBlob = await runGifsicle(inputBlob, opts);
+			afterSize = outputBlob.size;
 
 			// Store the blob for direct download (skip re-encoding)
 			project.setOptimizedBlob(outputBlob);
 
 			// Decode the result back to frames for preview
-			processing.start('Updating preview...');
+			processing.update(75, 'Updating preview...');
 			const buffer = await outputBlob.arrayBuffer();
 			const { frames, width, height } = await decodeGif(buffer);
 			project.updateFrames(frames);
@@ -139,6 +143,15 @@
 	}
 
 	let selectedMethod = $derived(methods.find((m) => m.id === method)!);
+
+	let beforeSize = $state<number | null>(null);
+	let afterSize = $state<number | null>(null);
+
+	function formatBytes(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+	}
 </script>
 
 <svelte:head>
@@ -251,6 +264,29 @@
 					</div>
 				</div>
 			</details>
+			{#if beforeSize !== null}
+				<div class="rounded-lg border border-zinc-700 bg-zinc-900/50 px-3 py-2.5">
+					<div class="flex items-center justify-between text-xs">
+						<span class="text-zinc-400">Before</span>
+						<span class="font-mono text-zinc-300">{formatBytes(beforeSize)}</span>
+					</div>
+					<div class="mt-1.5 flex items-center justify-between text-xs">
+						<span class="text-zinc-400">After</span>
+						<span class="font-mono {afterSize === null ? 'text-zinc-500' : afterSize < beforeSize ? 'text-green-400' : 'text-red-400'}">
+							{afterSize === null ? '—' : formatBytes(afterSize)}
+						</span>
+					</div>
+					{#if afterSize !== null}
+						<div class="mt-1.5 border-t border-zinc-700 pt-1.5 text-xs text-zinc-500">
+							{afterSize < beforeSize
+								? `−${(((beforeSize - afterSize) / beforeSize) * 100).toFixed(1)}% smaller`
+								: afterSize > beforeSize
+									? `+${(((afterSize - beforeSize) / beforeSize) * 100).toFixed(1)}% larger`
+									: 'No change'}
+						</div>
+					{/if}
+				</div>
+			{/if}
 		</div>
 	{:else if method === 'color-reduction'}
 		<SliderInput label="Max Colors" bind:value={maxColors} min={2} max={256} step={2} />

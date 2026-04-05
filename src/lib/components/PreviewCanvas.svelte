@@ -34,13 +34,13 @@
 		}
 	}
 
-	function play() {
+	export function play() {
 		isPlaying = true;
 		lastFrameTime = performance.now();
 		animate();
 	}
 
-	function pause() {
+	export function pause() {
 		isPlaying = false;
 		if (animationId !== null) {
 			cancelAnimationFrame(animationId);
