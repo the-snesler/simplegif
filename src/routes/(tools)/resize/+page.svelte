@@ -24,6 +24,14 @@
 		}
 	});
 
+	const presets = [75, 50, 25];
+
+	function applyPreset(pct: number) {
+		if (!project.isLoaded) return;
+		targetWidth = Math.round(project.width * (pct / 100));
+		targetHeight = Math.round(project.height * (pct / 100));
+	}
+
 	function onWidthChange() {
 		if (maintainAspect && aspectRatio) {
 			targetHeight = Math.round(targetWidth / aspectRatio);
@@ -61,12 +69,25 @@
 </svelte:head>
 
 <ToolPanel title="Resize" description="Change the resolution of your GIF.">
+	{#if project.isLoaded}
+		<div class="flex gap-2">
+			{#each presets as pct (pct)}
+				<button
+					onclick={() => applyPreset(pct)}
+					class="flex-1 py-1 text-xs rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 hover:border-green-600 hover:text-white transition-colors"
+				>
+					{pct}%
+				</button>
+			{/each}
+		</div>
+	{/if}
+
 	<div class="grid grid-cols-2 gap-3">
 		<div>
-			<NumberInput label="Width" bind:value={targetWidth} min={1} max={4096} />
+			<NumberInput label="Width" bind:value={targetWidth} min={1} max={4096} oninput={onWidthChange} />
 		</div>
 		<div>
-			<NumberInput label="Height" bind:value={targetHeight} min={1} max={4096} />
+			<NumberInput label="Height" bind:value={targetHeight} min={1} max={4096} oninput={onHeightChange} />
 		</div>
 	</div>
 
