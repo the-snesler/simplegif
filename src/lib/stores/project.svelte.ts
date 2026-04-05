@@ -6,6 +6,7 @@ let width = $state(0);
 let height = $state(0);
 let frameRate = $state(10);
 let isLoaded = $state(false);
+let optimizedBlob = $state<Blob | null>(null);
 
 export const project = {
 	get sourceFile() {
@@ -26,6 +27,9 @@ export const project = {
 	get isLoaded() {
 		return isLoaded;
 	},
+	get optimizedBlob() {
+		return optimizedBlob;
+	},
 	get frameCount() {
 		return frames.length;
 	},
@@ -44,6 +48,11 @@ export const project = {
 
 	updateFrames(newFrames: FrameData[]) {
 		frames = newFrames;
+		optimizedBlob = null;
+	},
+
+	setOptimizedBlob(blob: Blob | null) {
+		optimizedBlob = blob;
 	},
 
 	updateDimensions(w: number, h: number) {
@@ -62,5 +71,6 @@ export const project = {
 		height = 0;
 		frameRate = 10;
 		isLoaded = false;
+		optimizedBlob = null;
 	}
 };

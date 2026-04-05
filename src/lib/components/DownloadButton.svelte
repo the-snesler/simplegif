@@ -15,11 +15,19 @@
 	async function handleDownload() {
 		if (!project.isLoaded) return;
 
+		const baseName = project.sourceFile?.name.replace(/\.[^.]+$/, '') ?? 'output';
+
+		// If gifsicle produced an optimized blob, download it directly
+		// (avoids re-encoding which would undo gifsicle's optimizations)
+		if (project.optimizedBlob) {
+			downloadBlob(project.optimizedBlob, `${baseName}.gif`);
+			return;
+		}
+
 		processing.start('Encoding GIF...');
 		try {
 			const opts: EncodeOptions = { maxColors, transparencyOptimized };
 			const blob = await encodeGif(project.frames, project.width, project.height, opts);
-			const baseName = project.sourceFile?.name.replace(/\.[^.]+$/, '') ?? 'output';
 			downloadBlob(blob, `${baseName}.gif`);
 		} catch (err) {
 			console.error('Failed to encode GIF:', err);

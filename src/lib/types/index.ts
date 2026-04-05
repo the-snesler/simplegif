@@ -29,7 +29,7 @@ export interface TrimOptions {
 }
 
 export type OptimizeMethod =
-	| 'lossy'
+	| 'gifsicle'
 	| 'color-reduction'
 	| 'drop-frames'
 	| 'deduplicate'
@@ -38,10 +38,8 @@ export type OptimizeMethod =
 
 export interface OptimizeOptions {
 	method: OptimizeMethod;
-	/** Max colors per frame (2–256). Used by lossy and color-reduction. */
+	/** Max colors per frame (2–256). Used by color-reduction. */
 	maxColors: number;
-	/** Lossy compression level 0–200. Higher = more compression, more artifacts. */
-	lossyLevel: number;
 	/** Drop every Nth frame (2 = every other, 3 = every third, etc.) */
 	dropEveryN: number;
 	/** Fuzz factor 0–100 for duplicate detection and transparency diff. */

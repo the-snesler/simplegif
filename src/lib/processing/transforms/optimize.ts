@@ -10,8 +10,9 @@ export function optimizeFrames(
 	onProgress?: (pct: number) => void
 ): FrameData[] {
 	switch (options.method) {
-		case 'lossy':
-			return applyLossy(frames, options.lossyLevel, onProgress);
+		case 'gifsicle':
+			// Gifsicle runs on raw GIF binary, handled separately in the optimize page
+			return frames;
 		case 'color-reduction':
 			return applyColorReduction(frames, options.maxColors, onProgress);
 		case 'drop-frames':
@@ -23,42 +24,6 @@ export function optimizeFrames(
 		case 'coalesce':
 			return applyCoalesce(frames, onProgress);
 	}
-}
-
-/**
- * Lossy compression: reduces color precision by quantizing pixel channel
- * values to coarser steps. This produces fewer unique colors across frames,
- * which lets LZW compression achieve better ratios.
- */
-function applyLossy(
-	frames: FrameData[],
-	level: number,
-	onProgress?: (pct: number) => void
-): FrameData[] {
-	if (level === 0) return frames;
-
-	// level 0–200 → quantization step 1–16
-	const step = Math.max(1, Math.round((level / 200) * 16));
-	const result: FrameData[] = [];
-
-	for (let i = 0; i < frames.length; i++) {
-		const src = frames[i].imageData;
-		const data = new Uint8ClampedArray(src.data);
-
-		for (let j = 0; j < data.length; j += 4) {
-			data[j] = Math.round(data[j] / step) * step;
-			data[j + 1] = Math.round(data[j + 1] / step) * step;
-			data[j + 2] = Math.round(data[j + 2] / step) * step;
-		}
-
-		result.push({
-			imageData: new ImageData(data, src.width, src.height),
-			delay: frames[i].delay
-		});
-		onProgress?.(((i + 1) / frames.length) * 100);
-	}
-
-	return result;
 }
 
 /**
@@ -234,10 +199,7 @@ function applyTransparencyOptimization(
  * Undoes any transparency optimization by compositing each frame fully.
  * May increase file size but ensures maximum compatibility.
  */
-function applyCoalesce(
-	frames: FrameData[],
-	onProgress?: (pct: number) => void
-): FrameData[] {
+function applyCoalesce(frames: FrameData[], onProgress?: (pct: number) => void): FrameData[] {
 	const result: FrameData[] = [];
 	const w = frames[0]?.imageData.width ?? 0;
 	const h = frames[0]?.imageData.height ?? 0;
