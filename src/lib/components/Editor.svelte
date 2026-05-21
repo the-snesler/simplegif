@@ -8,6 +8,7 @@
 	import PreviewCanvas from './PreviewCanvas.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
 	import DownloadButton from './DownloadButton.svelte';
+	import WarningsButton from './WarningsButton.svelte';
 	import PIUndo from '~icons/pixelarticons/undo';
 	import PIRedo from '~icons/pixelarticons/redo';
 
@@ -54,7 +55,7 @@
 {#if !project.isLoaded}
 	<DropZone />
 {:else}
-	<div class="overflow-y-scroll h-full flex flex-1 flex-col">
+	<div class="flex h-full flex-1 flex-col overflow-y-scroll">
 		<div class="flex min-h-96 flex-1 flex-col">
 			<PreviewCanvas bind:this={preview} />
 
@@ -67,7 +68,8 @@
 
 			{@render children?.()}
 
-			<div class="flex justify-end gap-2 px-4 py-3 bg-zinc-950">
+			<div class="flex justify-end gap-2 bg-zinc-950 px-4 py-3">
+				<WarningsButton />
 				<button
 					onclick={() => history.undo()}
 					disabled={!history.canUndo || processing.isProcessing}
