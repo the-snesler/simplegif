@@ -53,15 +53,15 @@
 		<div class="space-y-2 text-sm">
 			<div class="flex justify-between text-zinc-400">
 				<span>Start frame</span>
-				<span class="tabular-nums text-zinc-300">{filmstrip.trimStart + 1}</span>
+				<span class="text-zinc-300 tabular-nums">{filmstrip.trimStart + 1}</span>
 			</div>
 			<div class="flex justify-between text-zinc-400">
 				<span>End frame</span>
-				<span class="tabular-nums text-zinc-300">{filmstrip.trimEnd + 1}</span>
+				<span class="text-zinc-300 tabular-nums">{filmstrip.trimEnd + 1}</span>
 			</div>
-			<div class="pt-1 border-t border-zinc-800 flex justify-between text-zinc-400">
+			<div class="flex justify-between border-t border-zinc-800 pt-1 text-zinc-400">
 				<span>Keeping</span>
-				<span class="tabular-nums text-zinc-300">{keptFrames} of {project.frameCount} frames</span>
+				<span class="text-zinc-300 tabular-nums">{keptFrames} of {project.frameCount} frames</span>
 			</div>
 		</div>
 	{/if}

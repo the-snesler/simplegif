@@ -7,10 +7,10 @@
 	let { children } = $props();
 </script>
 
-<div class="flex flex-col md:flex-row h-screen text-white bg-zinc-950">
+<div class="flex h-screen flex-col bg-zinc-950 text-white md:flex-row">
 	<MobileHeader />
 	<Sidebar />
-	<main class="flex-1 flex flex-col min-w-0">
+	<main class="flex min-w-0 flex-1 flex-col">
 		<Editor>
 			{@render children()}
 		</Editor>

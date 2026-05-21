@@ -5,9 +5,13 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import Icons from 'unplugin-icons/vite';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit(), Icons({
-      compiler: 'svelte',
-    })],
+	plugins: [
+		tailwindcss(),
+		sveltekit(),
+		Icons({
+			compiler: 'svelte'
+		})
+	],
 	server: {
 		headers: {
 			'Cross-Origin-Opener-Policy': 'same-origin',

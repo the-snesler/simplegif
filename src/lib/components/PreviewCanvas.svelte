@@ -114,13 +114,16 @@
 	});
 </script>
 
-<div class="flex-1 flex items-center justify-center bg-zinc-950 min-h-48 p-4 relative">
-	<div class="relative max-w-full max-h-full" style="aspect-ratio: {project.width}/{project.height};">
+<div class="relative flex min-h-48 flex-1 items-center justify-center bg-zinc-950 p-4">
+	<div
+		class="relative max-h-full max-w-full"
+		style="aspect-ratio: {project.width}/{project.height};"
+	>
 		<canvas
 			bind:this={canvas}
 			width={project.width}
 			height={project.height}
-			class="max-w-full max-h-full object-contain rounded bg-zinc-900"
+			class="max-h-full max-w-full rounded bg-zinc-900 object-contain"
 			style="image-rendering: pixelated;"
 		></canvas>
 		{#if cropStore.active && canvas}

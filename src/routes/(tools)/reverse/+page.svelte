@@ -31,10 +31,7 @@
 	/>
 </svelte:head>
 
-<ToolPanel
-	title="Reverse"
-	description="Reverse the frame order of your GIF."
->
+<ToolPanel title="Reverse" description="Reverse the frame order of your GIF.">
 	{#if project.isLoaded}
 		<p class="text-sm text-zinc-400">
 			This will reverse all {project.frameCount} frames.

@@ -19,9 +19,7 @@
 		const options: RotateOptions = { degrees, flipH, flipV };
 		processing.start('Rotating frames...');
 		try {
-			const newFrames = rotateFrames(project.frames, options, (pct) =>
-				processing.update(pct)
-			);
+			const newFrames = rotateFrames(project.frames, options, (pct) => processing.update(pct));
 			const swapDims = degrees === 90 || degrees === 270;
 			const newW = swapDims ? project.height : project.width;
 			const newH = swapDims ? project.width : project.height;
@@ -43,17 +41,14 @@
 	/>
 </svelte:head>
 
-<ToolPanel
-	title="Rotate / Flip"
-	description="Rotate or flip every frame."
->
+<ToolPanel title="Rotate / Flip" description="Rotate or flip every frame.">
 	<div>
-		<span class="text-xs text-zinc-400 block mb-2">Rotation</span>
+		<span class="mb-2 block text-xs text-zinc-400">Rotation</span>
 		<div class="grid grid-cols-4 gap-1">
-			{#each [0, 90, 180, 270] as deg}
+			{#each [0, 90, 180, 270] as deg (deg)}
 				<button
 					onclick={() => (degrees = deg as 0 | 90 | 180 | 270)}
-					class="px-2 py-1.5 rounded text-xs transition-colors {degrees === deg
+					class="rounded px-2 py-1.5 text-xs transition-colors {degrees === deg
 						? 'bg-green-700 text-white'
 						: 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}"
 				>

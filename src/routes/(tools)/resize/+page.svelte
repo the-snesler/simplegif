@@ -74,7 +74,7 @@
 			{#each presets as pct (pct)}
 				<button
 					onclick={() => applyPreset(pct)}
-					class="flex-1 py-1 text-xs rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 hover:border-green-600 hover:text-white transition-colors"
+					class="flex-1 rounded-md border border-zinc-700 bg-zinc-800 py-1 text-xs text-zinc-300 transition-colors hover:border-green-600 hover:text-white"
 				>
 					{pct}%
 				</button>
@@ -84,10 +84,22 @@
 
 	<div class="grid grid-cols-2 gap-3">
 		<div>
-			<NumberInput label="Width" bind:value={targetWidth} min={1} max={4096} oninput={onWidthChange} />
+			<NumberInput
+				label="Width"
+				bind:value={targetWidth}
+				min={1}
+				max={4096}
+				oninput={onWidthChange}
+			/>
 		</div>
 		<div>
-			<NumberInput label="Height" bind:value={targetHeight} min={1} max={4096} oninput={onHeightChange} />
+			<NumberInput
+				label="Height"
+				bind:value={targetHeight}
+				min={1}
+				max={4096}
+				oninput={onHeightChange}
+			/>
 		</div>
 	</div>
 

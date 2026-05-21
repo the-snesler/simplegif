@@ -58,7 +58,9 @@ export async function imageSequenceToFrames(
 	fps: number = 10,
 	onProgress?: (pct: number) => void
 ): Promise<{ frames: FrameData[]; width: number; height: number }> {
-	const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+	const sorted = [...files].sort((a, b) =>
+		a.name.localeCompare(b.name, undefined, { numeric: true })
+	);
 	const frames: FrameData[] = [];
 	const delay = Math.round(1000 / fps);
 

@@ -62,7 +62,7 @@
 			<span>Selection</span>
 			{#if hasSelection}
 				<button
-					class="text-green-500 hover:text-green-400 transition-colors"
+					class="text-green-500 transition-colors hover:text-green-400"
 					onclick={() => cropStore.activate(project.width, project.height)}
 				>
 					Reset
@@ -70,17 +70,21 @@
 			{/if}
 		</div>
 		<div class="grid grid-cols-2 gap-2 text-sm">
-			<div class="bg-zinc-800 rounded px-2.5 py-1.5 text-zinc-300 tabular-nums">
-				<span class="text-zinc-500 text-xs">X</span> {cropStore.rect.x}
+			<div class="rounded bg-zinc-800 px-2.5 py-1.5 text-zinc-300 tabular-nums">
+				<span class="text-xs text-zinc-500">X</span>
+				{cropStore.rect.x}
 			</div>
-			<div class="bg-zinc-800 rounded px-2.5 py-1.5 text-zinc-300 tabular-nums">
-				<span class="text-zinc-500 text-xs">Y</span> {cropStore.rect.y}
+			<div class="rounded bg-zinc-800 px-2.5 py-1.5 text-zinc-300 tabular-nums">
+				<span class="text-xs text-zinc-500">Y</span>
+				{cropStore.rect.y}
 			</div>
-			<div class="bg-zinc-800 rounded px-2.5 py-1.5 text-zinc-300 tabular-nums">
-				<span class="text-zinc-500 text-xs">W</span> {cropStore.rect.width}
+			<div class="rounded bg-zinc-800 px-2.5 py-1.5 text-zinc-300 tabular-nums">
+				<span class="text-xs text-zinc-500">W</span>
+				{cropStore.rect.width}
 			</div>
-			<div class="bg-zinc-800 rounded px-2.5 py-1.5 text-zinc-300 tabular-nums">
-				<span class="text-zinc-500 text-xs">H</span> {cropStore.rect.height}
+			<div class="rounded bg-zinc-800 px-2.5 py-1.5 text-zinc-300 tabular-nums">
+				<span class="text-xs text-zinc-500">H</span>
+				{cropStore.rect.height}
 			</div>
 		</div>
 	</div>

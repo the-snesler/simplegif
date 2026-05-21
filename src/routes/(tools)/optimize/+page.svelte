@@ -214,7 +214,7 @@
 							{/each}
 						</div>
 					</div>
-					
+
 					<SliderInput label="Color Limit" bind:value={gifsicleColors} min={0} max={256} step={1} />
 					<p class="text-xs text-zinc-500">
 						0 = unchanged. Lower values reduce file size but lose color detail.
@@ -272,7 +272,13 @@
 					</div>
 					<div class="mt-1.5 flex items-center justify-between text-xs">
 						<span class="text-zinc-400">After</span>
-						<span class="font-mono {afterSize === null ? 'text-zinc-500' : afterSize < beforeSize ? 'text-green-400' : 'text-red-400'}">
+						<span
+							class="font-mono {afterSize === null
+								? 'text-zinc-500'
+								: afterSize < beforeSize
+									? 'text-green-400'
+									: 'text-red-400'}"
+						>
 							{afterSize === null ? '—' : formatBytes(afterSize)}
 						</span>
 					</div>
