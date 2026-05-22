@@ -56,8 +56,7 @@ export function detectFileType(file: File): 'gif' | 'video' | 'image' | 'unknown
 
 	const ext = file.name.split('.').pop()?.toLowerCase();
 	if (ext === 'gif') return 'gif';
-	if (['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv', 'wmv', 'ogv'].includes(ext ?? ''))
-		return 'video';
+	if (['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv', 'wmv', 'ogv'].includes(ext ?? '')) return 'video';
 	if (['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'].includes(ext ?? '')) return 'image';
 
 	return 'unknown';

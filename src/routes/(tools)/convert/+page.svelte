@@ -50,7 +50,7 @@
 
 	<button
 		onclick={() => fileInput?.click()}
-		class="w-full px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm transition-colors"
+		class="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm transition-colors hover:bg-zinc-700"
 	>
 		Select Video File
 	</button>

@@ -69,11 +69,8 @@
 			} else if (type === 'video') {
 				const { fetchFile } = await import('@ffmpeg/util');
 				const data = await fetchFile(file);
-				const { frames, width, height } = await videoToFrames(
-					data,
-					file.name,
-					10,
-					(pct) => processing.update(pct, 'Extracting frames...')
+				const { frames, width, height } = await videoToFrames(data, file.name, 10, (pct) =>
+					processing.update(pct, 'Extracting frames...')
 				);
 				project.setSource(
 					{ name: file.name, type: file.type, size: file.size, blob: file },
@@ -136,7 +133,7 @@
 </script>
 
 <button
-	class="flex-1 flex flex-col items-center justify-center p-8 cursor-pointer w-full"
+	class="flex w-full flex-1 cursor-pointer flex-col items-center justify-center p-8"
 	ondragover={handleDragOver}
 	ondragleave={handleDragLeave}
 	ondrop={handleDrop}
@@ -144,23 +141,21 @@
 	type="button"
 >
 	<div
-		class="border-2 border-dashed rounded-2xl p-12 flex flex-col items-center gap-4 max-w-lg w-full transition-colors {isDragging
+		class="flex w-full max-w-lg flex-col items-center gap-4 rounded-2xl border-2 border-dashed p-12 transition-colors {isDragging
 			? 'border-green-500 bg-green-950/20'
 			: 'border-zinc-700 hover:border-zinc-500'}"
 	>
 		<div
-			class="w-16 h-16 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center"
+			class="flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-800"
 		>
-			<DNMovieCamera class="w-8 h-8 text-zinc-400" />
+			<DNMovieCamera class="h-8 w-8 text-zinc-400" />
 		</div>
 		<div class="text-center">
 			<p class="text-lg font-medium text-zinc-200">Drop a file here</p>
-			<p class="text-sm text-zinc-500 mt-1">
-				GIF, MP4, WebM, AVI, MOV, or drag multiple images
-			</p>
+			<p class="mt-1 text-sm text-zinc-500">GIF, MP4, WebM, AVI, MOV, or drag multiple images</p>
 		</div>
 		<div
-			class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 transition-colors"
+			class="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-700"
 		>
 			Browse files
 		</div>

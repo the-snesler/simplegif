@@ -43,10 +43,7 @@
 	/>
 </svelte:head>
 
-<ToolPanel
-	title="Frame Rate"
-	description="Adjust the playback speed of your GIF."
->
+<ToolPanel title="Frame Rate" description="Adjust the playback speed of your GIF.">
 	<SliderInput label="Target FPS" bind:value={targetFps} min={1} max={50} suffix=" fps" />
 	<p class="text-xs text-zinc-500">
 		Frame delay: {delay}ms

@@ -36,10 +36,7 @@
 	/>
 </svelte:head>
 
-<ToolPanel
-	title="Skip Frames"
-	description="Keep every Nth frame to reduce file size."
->
+<ToolPanel title="Skip Frames" description="Keep every Nth frame to reduce file size.">
 	<SliderInput label="Keep every" bind:value={keepEveryN} min={2} max={10} suffix=" frames" />
 	<p class="text-xs text-zinc-500">
 		{project.frameCount} frames &rarr; {resultCount} frames

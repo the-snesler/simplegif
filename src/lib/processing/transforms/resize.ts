@@ -9,7 +9,10 @@ export function resizeFrames(
 	const result: FrameData[] = [];
 	const canvas = new OffscreenCanvas(targetWidth, targetHeight);
 	const ctx = canvas.getContext('2d')!;
-	const srcCanvas = new OffscreenCanvas(frames[0]?.imageData.width ?? 0, frames[0]?.imageData.height ?? 0);
+	const srcCanvas = new OffscreenCanvas(
+		frames[0]?.imageData.width ?? 0,
+		frames[0]?.imageData.height ?? 0
+	);
 	const srcCtx = srcCanvas.getContext('2d')!;
 
 	for (let i = 0; i < frames.length; i++) {

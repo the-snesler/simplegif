@@ -14,10 +14,10 @@
 </script>
 
 <div class="border-t border-b border-zinc-800 bg-zinc-950">
-	<div class="px-4 py-3 border-b border-zinc-800">
-		<h2 class="font-medium text-sm">{title}</h2>
+	<div class="border-b border-zinc-800 px-4 py-3">
+		<h2 class="text-sm font-medium">{title}</h2>
 		{#if description}
-			<p class="text-xs text-zinc-500 mt-1">{description}</p>
+			<p class="mt-1 text-xs text-zinc-500">{description}</p>
 		{/if}
 	</div>
 
@@ -26,7 +26,7 @@
 			Load a file first to use this tool.
 		</div>
 	{:else}
-		<div class="px-4 py-3 space-y-3">
+		<div class="space-y-3 px-4 py-3">
 			{@render children?.()}
 		</div>
 	{/if}

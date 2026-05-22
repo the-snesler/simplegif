@@ -19,11 +19,11 @@
 
 <a
 	href={resolve(href)}
-	class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors {isActive
+	class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors {isActive
 		? 'bg-zinc-700/50 text-white'
-		: 'text-zinc-400 hover:text-white hover:bg-zinc-800'}"
+		: 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}"
 >
-	<span class="w-5 h-5 flex items-center justify-center shrink-0">
+	<span class="flex h-5 w-5 shrink-0 items-center justify-center">
 		{@render icon()}
 	</span>
 	<span>{label}</span>

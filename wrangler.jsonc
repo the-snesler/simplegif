@@ -7,14 +7,14 @@
 	"name": "simplegif",
 	"compatibility_date": "2025-11-06",
 	"assets": {
-    "directory": "./build"
-  },
+		"directory": "./build"
+	},
 	"routes": [
-    {
-      "pattern": "simplegif.samnesler.com",
-      "custom_domain": true
-    }
-  ],
+		{
+			"pattern": "simplegif.samnesler.com",
+			"custom_domain": true
+		}
+	],
 	"preview_urls": true
 	/**
 	 * Smart Placement
