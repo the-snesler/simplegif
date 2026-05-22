@@ -55,6 +55,7 @@
 	"dependencies": {
 		"@ffmpeg/ffmpeg": "^0.12.15",
 		"@ffmpeg/util": "^0.12.2",
+		"@fontsource/fusion-pixel-10px-proportional-jp": "^5.2.5",
 		"gifenc": "^1.0.3",
 		"omggif": "^1.0.10"
 	}

@@ -27,7 +27,7 @@
 				class="flex items-center gap-2 border-b border-zinc-800 px-4 py-3 text-sm font-medium text-yellow-400"
 			>
 				<PIWarningBox class="size-4" />
-				Suggestions for a smaller GIF
+				GIF Tool Suggestions
 			</div>
 			<ul class="divide-y divide-zinc-800">
 				{#each warnings.list as w (w.id)}

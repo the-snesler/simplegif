@@ -24,7 +24,7 @@
 		}
 	});
 
-	const presets = [75, 50, 25];
+	const presets = [75, 66, 50, 33, 25];
 
 	function applyPreset(pct: number) {
 		if (!project.isLoaded) return;
