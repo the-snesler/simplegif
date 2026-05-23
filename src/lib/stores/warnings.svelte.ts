@@ -16,14 +16,9 @@ const MAX_DURATION_MS = 10_000;
 const MAX_ASPECT = 3;
 const MAX_FRAME_RATE = 30;
 const MAX_ESTIMATED_BYTES = 8 * 1024 * 1024;
-// Napkin math: GIF stores 1 byte per pixel (8-bit indexed), and LZW typically
-// compresses 3-5x. 0.2 errs slightly conservative (over-warns on flat content),
-// which is the right bias for a "you may want to optimize" hint.
-const COMPRESSION_FACTOR = 0.2;
-
-function estimateBytes(width: number, height: number, frameCount: number): number {
-	return Math.round(width * height * frameCount * COMPRESSION_FACTOR);
-}
+// Used only before the per-project sample completes on first load.
+// 1 byte/pixel indexed * ~5x LZW = 0.2, slightly biased to over-warn.
+const FALLBACK_RATIO = 0.2;
 
 const list = $derived.by<Warning[]>(() => {
 	if (!project.isLoaded || project.frameCount === 0) return [];
@@ -77,7 +72,8 @@ const list = $derived.by<Warning[]>(() => {
 		});
 	}
 
-	const estimated = estimateBytes(width, height, frameCount);
+	const estimated =
+		project.estimatedBytes ?? Math.round(width * height * frameCount * FALLBACK_RATIO);
 	if (estimated > MAX_ESTIMATED_BYTES) {
 		out.push({
 			id: 'filesize',

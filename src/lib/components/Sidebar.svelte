@@ -52,8 +52,12 @@
 			<div class="flex gap-3">
 				<span>{project.width}&times;{project.height}</span>
 				<span>{project.frameCount} frames</span>
-				{#if project.sourceFile}
-					<span>{formatFileSize(project.sourceFile.size)}</span>
+				{#if project.optimizedBlob}
+					<span>{formatFileSize(project.optimizedBlob.size)}</span>
+				{:else if project.estimatedBytes != null}
+					<span>~{formatFileSize(project.estimatedBytes)}</span>
+				{:else}
+					<span>…</span>
 				{/if}
 			</div>
 			<div class="px-4 py-3">
