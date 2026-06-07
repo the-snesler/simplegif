@@ -52,11 +52,12 @@
 	});
 </script>
 
-{#if !project.isLoaded}
-	<DropZone />
-{:else}
-	<div class="flex h-full flex-1 flex-col overflow-y-scroll">
-		<div class="flex min-h-96 flex-1 flex-col">
+<div class="flex h-full flex-1 flex-col overflow-y-scroll">
+	<div class="flex min-h-96 flex-1 flex-col">
+		{#if !project.isLoaded}
+			<DropZone />
+			{@render children?.()}
+		{:else}
 			<PreviewCanvas bind:this={preview} />
 
 			<PlaybackControls
@@ -97,6 +98,6 @@
 				{/if}
 				<DownloadButton />
 			</div>
-		</div>
+		{/if}
 	</div>
-{/if}
+</div>
