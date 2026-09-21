@@ -12,7 +12,7 @@
 	},
 	"routes": [
 		{
-			"pattern": "simplegif.samnesler.com",
+			"pattern": "simplegif.tsuni.dev",
 			"custom_domain": true
 		}
 	],
