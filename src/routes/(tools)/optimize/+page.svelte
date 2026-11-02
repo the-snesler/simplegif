@@ -4,9 +4,8 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
-	import { optimizeFrames } from '$lib/processing/transforms/optimize';
 	import { encodeGif } from '$lib/processing/encoder';
-	import { decodeGif } from '$lib/processing/decoder';
+	import { optimizeFramesAsync, decodeGifAsync } from '$lib/processing/worker/tasks';
 	import {
 		runGifsicle,
 		defaultGifsicleOptions,
@@ -95,7 +94,7 @@
 			processing.start('Optimizing...');
 			try {
 				const opts = buildOptions();
-				const optimized = optimizeFrames(project.frames, opts, (pct) => {
+				const optimized = await optimizeFramesAsync(project.frames, opts, (pct) => {
 					processing.update(pct);
 				});
 				project.updateFrames(optimized);
@@ -112,7 +111,13 @@
 		processing.start('Encoding GIF for gifsicle...');
 		try {
 			// First encode current frames to a GIF blob
-			const inputBlob = await encodeGif(project.frames, project.width, project.height);
+			const inputBlob = await encodeGif(
+				project.frames,
+				project.width,
+				project.height,
+				undefined,
+				(pct) => processing.update(pct * 0.25)
+			);
 			beforeSize = inputBlob.size;
 			afterSize = null;
 
@@ -127,7 +132,7 @@
 			// Decode the result back to frames for preview
 			processing.update(75, 'Updating preview...');
 			const buffer = await outputBlob.arrayBuffer();
-			const { frames, width, height } = await decodeGif(buffer);
+			const { frames, width, height } = await decodeGifAsync(buffer);
 			project.updateFrames(frames);
 			// Re-set the blob since updateFrames clears it
 			project.setOptimizedBlob(outputBlob);

@@ -2,7 +2,8 @@
 	import DNMovieCamera from '~icons/dinkie-icons/movie-camera';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
-	import { decodeGif, detectFileType } from '$lib/processing/decoder';
+	import { detectFileType } from '$lib/processing/decoder';
+	import { decodeGifAsync } from '$lib/processing/worker/tasks';
 	import { videoToFrames, imageSequenceToFrames } from '$lib/processing/ffmpeg-bridge';
 
 	let isDragging = $state(false);
@@ -56,7 +57,7 @@
 		try {
 			if (type === 'gif') {
 				const buffer = await file.arrayBuffer();
-				const { frames, width, height } = await decodeGif(buffer);
+				const { frames, width, height } = await decodeGifAsync(buffer);
 				const avgDelay = frames.reduce((sum, f) => sum + f.delay, 0) / frames.length;
 				const fps = Math.round(1000 / (avgDelay || 100));
 				project.setSource(

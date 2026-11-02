@@ -1,7 +1,7 @@
 import type { FrameData, ProjectFile } from '$lib/types';
 
-let sourceFile = $state<ProjectFile | null>(null);
-let frames = $state<FrameData[]>([]);
+let sourceFile = $state.raw<ProjectFile | null>(null);
+let frames = $state.raw<FrameData[]>([]);
 let width = $state(0);
 let height = $state(0);
 let frameRate = $state(10);

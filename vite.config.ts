@@ -24,6 +24,10 @@ export default defineConfig({
 			'Cross-Origin-Embedder-Policy': 'require-corp'
 		}
 	},
+	worker: {
+		// Processing workers dynamically import gifenc, which requires code-splitting
+		format: 'es'
+	},
 	optimizeDeps: {
 		exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util']
 	},

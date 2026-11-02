@@ -4,7 +4,7 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
-	import { resizeFrames } from '$lib/processing/transforms/resize';
+	import { resizeFramesAsync } from '$lib/processing/worker/tasks';
 
 	$effect(() => {
 		applyAction.set(applyResize);
@@ -47,7 +47,7 @@
 	async function applyResize() {
 		processing.start('Resizing frames...');
 		try {
-			const newFrames = resizeFrames(project.frames, targetWidth, targetHeight, (pct) =>
+			const newFrames = await resizeFramesAsync(project.frames, targetWidth, targetHeight, (pct) =>
 				processing.update(pct)
 			);
 			project.updateFrames(newFrames);

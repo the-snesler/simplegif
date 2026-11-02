@@ -4,7 +4,7 @@
 	import { processing } from '$lib/stores/processing.svelte';
 	import { cropStore } from '$lib/stores/crop.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
-	import { cropFrames } from '$lib/processing/transforms/crop';
+	import { cropFramesAsync } from '$lib/processing/worker/tasks';
 	import { onMount } from 'svelte';
 
 	$effect(() => {
@@ -36,7 +36,9 @@
 		const rect = cropStore.rect;
 		processing.start('Cropping frames...');
 		try {
-			const newFrames = cropFrames(project.frames, rect, (pct) => processing.update(pct));
+			const newFrames = await cropFramesAsync(project.frames, rect, (pct) =>
+				processing.update(pct)
+			);
 			project.updateFrames(newFrames);
 			project.updateDimensions(rect.width, rect.height);
 			cropStore.activate(rect.width, rect.height);

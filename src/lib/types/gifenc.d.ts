@@ -1,5 +1,6 @@
 declare module 'gifenc' {
-	export function GIFEncoder(): {
+	export function GIFEncoder(opts?: { auto?: boolean; initialCapacity?: number }): {
+		writeHeader(): void;
 		writeFrame(
 			index: Uint8Array,
 			width: number,
@@ -10,6 +11,10 @@ declare module 'gifenc' {
 				dispose?: number;
 				transparent?: boolean;
 				transparentIndex?: number;
+				/** Manual mode only: write logical screen descriptor + global palette. */
+				first?: boolean;
+				repeat?: number;
+				colorDepth?: number;
 			}
 		): void;
 		finish(): void;

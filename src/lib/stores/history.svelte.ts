@@ -8,8 +8,10 @@ interface Snapshot {
 	frameRate: number;
 }
 
-let undoStack = $state<Snapshot[]>([]);
-let redoStack = $state<Snapshot[]>([]);
+// Raw state: snapshots hold large, immutable frame arrays that must not be
+// deep-proxied. Stacks are replaced (never mutated) so reactivity still fires.
+let undoStack = $state.raw<Snapshot[]>([]);
+let redoStack = $state.raw<Snapshot[]>([]);
 
 function capture(): Snapshot {
 	return {
@@ -36,21 +38,23 @@ export const history = {
 
 	/** Save current state before a destructive apply. */
 	snapshot() {
-		undoStack.push(capture());
+		undoStack = [...undoStack, capture()];
 		redoStack = [];
 	},
 
 	undo() {
-		const prev = undoStack.pop();
+		const prev = undoStack.at(-1);
 		if (!prev) return;
-		redoStack.push(capture());
+		undoStack = undoStack.slice(0, -1);
+		redoStack = [...redoStack, capture()];
 		restore(prev);
 	},
 
 	redo() {
-		const next = redoStack.pop();
+		const next = redoStack.at(-1);
 		if (!next) return;
-		undoStack.push(capture());
+		redoStack = redoStack.slice(0, -1);
+		undoStack = [...undoStack, capture()];
 		restore(next);
 	},
 

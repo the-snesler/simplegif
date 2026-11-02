@@ -27,7 +27,9 @@
 		processing.start('Encoding GIF...');
 		try {
 			const opts: EncodeOptions = { maxColors, transparencyOptimized };
-			const blob = await encodeGif(project.frames, project.width, project.height, opts);
+			const blob = await encodeGif(project.frames, project.width, project.height, opts, (pct) =>
+				processing.update(pct)
+			);
 			downloadBlob(blob, `${baseName}.gif`);
 		} catch (err) {
 			console.error('Failed to encode GIF:', err);

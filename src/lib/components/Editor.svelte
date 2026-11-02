@@ -4,6 +4,8 @@
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { history } from '$lib/stores/history.svelte';
+	import { playback } from '$lib/stores/playback.svelte';
+	import { warmupWorkers } from '$lib/processing/worker/pool';
 	import DropZone from './DropZone.svelte';
 	import PreviewCanvas from './PreviewCanvas.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
@@ -15,17 +17,13 @@
 	let { children }: { children?: Snippet } = $props();
 
 	let preview = $state<PreviewCanvas | null>(null);
-	let currentFrame = $state(0);
-	let isPlaying = $state(false);
 
 	function handleTogglePlay() {
 		preview?.togglePlayback();
-		isPlaying = preview?.getIsPlaying() ?? false;
 	}
 
 	function handleFrameChange(frame: number) {
 		preview?.setCurrentFrame(frame);
-		currentFrame = frame;
 	}
 
 	async function handleApply() {
@@ -34,16 +32,9 @@
 		await applyAction.onApply();
 	}
 
-	// Sync state from preview on animation
+	// Start processing workers as soon as there's something to process
 	$effect(() => {
-		if (!preview || !project.isLoaded) return;
-
-		const interval = setInterval(() => {
-			currentFrame = preview?.getCurrentFrame() ?? 0;
-			isPlaying = preview?.getIsPlaying() ?? false;
-		}, 50);
-
-		return () => clearInterval(interval);
+		if (project.isLoaded) warmupWorkers();
 	});
 
 	$effect(() => {
@@ -61,8 +52,8 @@
 			<PreviewCanvas bind:this={preview} />
 
 			<PlaybackControls
-				{currentFrame}
-				{isPlaying}
+				currentFrame={playback.currentFrame}
+				isPlaying={playback.isPlaying}
 				onTogglePlay={handleTogglePlay}
 				onFrameChange={handleFrameChange}
 			/>
