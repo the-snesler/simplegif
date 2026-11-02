@@ -1,10 +1,7 @@
 <script lang="ts">
 	import DNMovieCamera from '~icons/dinkie-icons/movie-camera';
-	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
-	import { detectFileType } from '$lib/processing/decoder';
-	import { decodeGifAsync } from '$lib/processing/worker/tasks';
-	import { videoToFrames, imageSequenceToFrames } from '$lib/processing/ffmpeg-bridge';
+	import { importFile, importSequence } from '$lib/engine/import';
 
 	let isDragging = $state(false);
 	let fileInput = $state<HTMLInputElement | null>(null);
@@ -24,12 +21,7 @@
 
 		const files = e.dataTransfer?.files;
 		if (!files || files.length === 0) return;
-
-		if (files.length > 1) {
-			await loadImageSequence(Array.from(files));
-		} else {
-			await loadFile(files[0]);
-		}
+		await load(Array.from(files));
 	}
 
 	function handleClick() {
@@ -40,93 +32,18 @@
 		const input = e.target as HTMLInputElement;
 		const files = input.files;
 		if (!files || files.length === 0) return;
-
-		if (files.length > 1) {
-			await loadImageSequence(Array.from(files));
-		} else {
-			await loadFile(files[0]);
-		}
+		await load(Array.from(files));
 		input.value = '';
 	}
 
-	async function loadFile(file: File) {
-		const type = detectFileType(file);
-
-		processing.start('Loading file...');
-
+	async function load(files: File[]) {
+		const multiple = files.length > 1;
+		processing.start(multiple ? 'Loading image sequence...' : 'Loading file...');
 		try {
-			if (type === 'gif') {
-				const buffer = await file.arrayBuffer();
-				const { frames, width, height } = await decodeGifAsync(buffer);
-				const avgDelay = frames.reduce((sum, f) => sum + f.delay, 0) / frames.length;
-				const fps = Math.round(1000 / (avgDelay || 100));
-				project.setSource(
-					{ name: file.name, type: file.type, size: file.size, blob: file },
-					frames,
-					width,
-					height,
-					fps
-				);
-			} else if (type === 'video') {
-				const { fetchFile } = await import('@ffmpeg/util');
-				const data = await fetchFile(file);
-				const { frames, width, height } = await videoToFrames(data, file.name, 10, (pct) =>
-					processing.update(pct, 'Extracting frames...')
-				);
-				project.setSource(
-					{ name: file.name, type: file.type, size: file.size, blob: file },
-					frames,
-					width,
-					height,
-					10
-				);
-			} else if (type === 'image') {
-				const bitmap = await createImageBitmap(file);
-				const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-				const ctx = canvas.getContext('2d')!;
-				ctx.drawImage(bitmap, 0, 0);
-				const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
-				bitmap.close();
-				project.setSource(
-					{ name: file.name, type: file.type, size: file.size, blob: file },
-					[{ imageData, delay: 100 }],
-					imageData.width,
-					imageData.height,
-					10
-				);
-			}
+			if (multiple) await importSequence(files, 10);
+			else await importFile(files[0]);
 		} catch (err) {
 			console.error('Failed to load file:', err);
-		} finally {
-			processing.finish();
-		}
-	}
-
-	async function loadImageSequence(files: File[]) {
-		const imageFiles = files.filter(
-			(f) => f.type.startsWith('image/') || /\.(png|jpg|jpeg|webp|bmp)$/i.test(f.name)
-		);
-		if (imageFiles.length === 0) return;
-
-		processing.start('Loading image sequence...');
-		try {
-			const { frames, width, height } = await imageSequenceToFrames(imageFiles, 10, (pct) =>
-				processing.update(pct, 'Processing images...')
-			);
-			project.setSource(
-				{
-					name: `${imageFiles.length} images`,
-					type: 'image/sequence',
-					size: imageFiles.reduce((sum, f) => sum + f.size, 0),
-					blob: new Blob()
-				},
-				frames,
-				width,
-				height,
-				10
-			);
-		} catch (err) {
-			console.error('Failed to load image sequence:', err);
 		} finally {
 			processing.finish();
 		}

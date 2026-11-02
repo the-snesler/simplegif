@@ -1,11 +1,13 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { onMount } from 'svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
 	import { history } from '$lib/stores/history.svelte';
 	import { playback } from '$lib/stores/playback.svelte';
-	import { warmupWorkers } from '$lib/processing/worker/pool';
+	import { filmstrip } from '$lib/stores/filmstrip.svelte';
+	import { engine } from '$lib/engine/client';
 	import DropZone from './DropZone.svelte';
 	import PreviewCanvas from './PreviewCanvas.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
@@ -16,30 +18,34 @@
 
 	let { children }: { children?: Snippet } = $props();
 
-	let preview = $state<PreviewCanvas | null>(null);
+	// Start the engine + helper workers before the user picks a file
+	onMount(() => engine.warmup());
 
 	function handleTogglePlay() {
-		preview?.togglePlayback();
+		if (playback.isPlaying) engine.pause();
+		else engine.play();
 	}
 
 	function handleFrameChange(frame: number) {
-		preview?.setCurrentFrame(frame);
+		engine.seek(frame);
 	}
 
 	async function handleApply() {
 		if (!applyAction.onApply) return;
-		history.snapshot();
 		await applyAction.onApply();
 	}
 
-	// Start processing workers as soon as there's something to process
-	$effect(() => {
-		if (project.isLoaded) warmupWorkers();
-	});
+	async function runHistory(fn: () => Promise<unknown>) {
+		try {
+			await fn();
+		} catch (err) {
+			console.error(err);
+		}
+	}
 
+	// Keep the engine's playback loop within trim bounds
 	$effect(() => {
-		applyAction.setPausePreview(() => preview?.pause());
-		return () => applyAction.setPausePreview(null);
+		engine.setTrimBounds(filmstrip.trimMode, filmstrip.trimStart, filmstrip.trimEnd);
 	});
 </script>
 
@@ -49,7 +55,7 @@
 			<DropZone />
 			{@render children?.()}
 		{:else}
-			<PreviewCanvas bind:this={preview} />
+			<PreviewCanvas />
 
 			<PlaybackControls
 				currentFrame={playback.currentFrame}
@@ -63,7 +69,7 @@
 			<div class="flex justify-end gap-2 bg-zinc-950 px-4 py-3">
 				<WarningsButton />
 				<button
-					onclick={() => history.undo()}
+					onclick={() => runHistory(history.undo)}
 					disabled={!history.canUndo || processing.isProcessing}
 					class="inline-flex size-9 items-center justify-center rounded-lg bg-zinc-800 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-30"
 					title="Undo"
@@ -71,7 +77,7 @@
 					<PIUndo class="size-4" />
 				</button>
 				<button
-					onclick={() => history.redo()}
+					onclick={() => runHistory(history.redo)}
 					disabled={!history.canRedo || processing.isProcessing}
 					class="inline-flex size-9 items-center justify-center rounded-lg bg-zinc-800 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-30"
 					title="Redo"

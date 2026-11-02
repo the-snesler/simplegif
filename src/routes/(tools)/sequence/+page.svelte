@@ -3,7 +3,7 @@
 	import SliderInput from '$lib/components/controls/SliderInput.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
-	import { imageSequenceToFrames } from '$lib/processing/ffmpeg-bridge';
+	import { filterImages, importSequence } from '$lib/engine/import';
 
 	let fps = $state(10);
 	let fileInput = $state<HTMLInputElement | null>(null);
@@ -13,28 +13,12 @@
 		const files = input.files;
 		if (!files || files.length === 0) return;
 
-		const imageFiles = Array.from(files).filter(
-			(f) => f.type.startsWith('image/') || /\.(png|jpg|jpeg|webp|bmp)$/i.test(f.name)
-		);
+		const imageFiles = filterImages(Array.from(files));
 		if (imageFiles.length === 0) return;
 
 		processing.start('Loading images...');
 		try {
-			const { frames, width, height } = await imageSequenceToFrames(imageFiles, fps, (pct) =>
-				processing.update(pct, 'Processing images...')
-			);
-			project.setSource(
-				{
-					name: `${imageFiles.length} images`,
-					type: 'image/sequence',
-					size: imageFiles.reduce((sum, f) => sum + f.size, 0),
-					blob: new Blob()
-				},
-				frames,
-				width,
-				height,
-				fps
-			);
+			await importSequence(imageFiles, fps);
 		} catch (err) {
 			console.error('Failed to load image sequence:', err);
 		} finally {

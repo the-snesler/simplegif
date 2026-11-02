@@ -4,7 +4,7 @@
 	import { processing } from '$lib/stores/processing.svelte';
 	import { filmstrip } from '$lib/stores/filmstrip.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
-	import { trimFrames } from '$lib/processing/transforms/trim';
+	import { engine } from '$lib/engine/client';
 
 	// Enable trim mode on mount, disable on unmount
 	$effect(() => {
@@ -24,9 +24,8 @@
 	async function applyTrim() {
 		processing.start('Trimming frames...');
 		try {
-			const newFrames = trimFrames(project.frames, filmstrip.trimStart, filmstrip.trimEnd);
-			project.updateFrames(newFrames);
-			filmstrip.enableTrim(0, newFrames.length - 1);
+			await engine.edit({ op: 'trim', start: filmstrip.trimStart, end: filmstrip.trimEnd });
+			filmstrip.enableTrim(0, project.frameCount - 1);
 		} catch (err) {
 			console.error('Failed to trim:', err);
 		} finally {

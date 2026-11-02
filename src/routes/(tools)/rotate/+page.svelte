@@ -1,9 +1,8 @@
 <script lang="ts">
 	import ToolPanel from '$lib/components/ToolPanel.svelte';
-	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
-	import { rotateFramesAsync } from '$lib/processing/worker/tasks';
+	import { engine } from '$lib/engine/client';
 	import type { RotateOptions } from '$lib/types';
 
 	$effect(() => {
@@ -19,14 +18,7 @@
 		const options: RotateOptions = { degrees, flipH, flipV };
 		processing.start('Rotating frames...');
 		try {
-			const newFrames = await rotateFramesAsync(project.frames, options, (pct) =>
-				processing.update(pct)
-			);
-			const swapDims = degrees === 90 || degrees === 270;
-			const newW = swapDims ? project.height : project.width;
-			const newH = swapDims ? project.width : project.height;
-			project.updateFrames(newFrames);
-			project.updateDimensions(newW, newH);
+			await engine.edit({ op: 'rotate', options }, (pct) => processing.update(pct));
 		} catch (err) {
 			console.error('Failed to rotate:', err);
 		} finally {

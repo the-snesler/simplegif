@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { project } from '$lib/stores/project.svelte';
 	import { filmstrip } from '$lib/stores/filmstrip.svelte';
-	import { untrack } from 'svelte';
+	import { engine } from '$lib/engine/client';
 
 	let {
 		currentFrame = 0,
@@ -15,18 +15,11 @@
 		onFrameChange?: (frame: number) => void;
 	} = $props();
 
-	const STRIP_HEIGHT = 48;
-
 	let stripContainer = $state<HTMLDivElement | null>(null);
 	let stripCanvas = $state<HTMLCanvasElement | null>(null);
 	let isDraggingScrub = $state(false);
 	let isDraggingTrimStart = $state(false);
 	let isDraggingTrimEnd = $state(false);
-
-	// Track the frame array reference and width to regenerate thumbnails when they change
-	let lastFramesRef: unknown = null;
-	let lastStripWidth = 0;
-	let stripWidth = $state(0);
 
 	// Playhead position as a percentage
 	let playheadPct = $derived(
@@ -54,90 +47,33 @@
 		`left: calc(${trimStartPct * 0.01} * (100% - ${HANDLE_W * 2}px) + ${HANDLE_W}px); width: calc(${trimEndPct * 0.01 - trimStartPct * 0.01} * (100% - ${HANDLE_W * 2}px));`
 	);
 
-	// Observe strip container width
+	// Thumbnails are rendered by the engine worker into the transferred canvas
+	$effect(() => {
+		if (!stripCanvas) return;
+		engine.attachStrip(stripCanvas.transferControlToOffscreen());
+	});
+
+	// Report strip width to the engine (debounced after the first measurement)
 	$effect(() => {
 		if (!stripContainer) return;
+		let timeout: ReturnType<typeof setTimeout> | null = null;
+		let first = true;
 		const ro = new ResizeObserver((entries) => {
-			for (const entry of entries) {
-				stripWidth = entry.contentRect.width;
+			const width = Math.round(entries[entries.length - 1].contentRect.width);
+			if (timeout) clearTimeout(timeout);
+			if (first) {
+				first = false;
+				engine.setStripWidth(width);
+			} else {
+				timeout = setTimeout(() => engine.setStripWidth(width), 300);
 			}
 		});
 		ro.observe(stripContainer);
-		return () => ro.disconnect();
+		return () => {
+			ro.disconnect();
+			if (timeout) clearTimeout(timeout);
+		};
 	});
-
-	// Generate filmstrip thumbnails when frames or width changes (debounced for width)
-	$effect(() => {
-		const frames = project.frames;
-		const w = project.width;
-		const h = project.height;
-		const canvasEl = stripCanvas;
-		const containerW = stripWidth;
-
-		if (!canvasEl || frames.length === 0 || w === 0 || h === 0 || containerW === 0) return;
-
-		const framesChanged = frames !== lastFramesRef;
-		const widthChanged = containerW !== lastStripWidth && lastStripWidth !== 0;
-
-		// If nothing changed, skip
-		if (!framesChanged && !widthChanged) return;
-
-		// Debounce width changes (300ms), but regenerate immediately for frame changes
-		if (widthChanged && !framesChanged) {
-			const timeoutId = setTimeout(() => {
-				untrack(() => {
-					lastStripWidth = containerW;
-					generateThumbnails(canvasEl, frames, w, h, containerW);
-				});
-			}, 300);
-			return () => clearTimeout(timeoutId);
-		}
-
-		// Regenerate immediately for frame changes
-		untrack(() => {
-			lastFramesRef = frames;
-			lastStripWidth = containerW;
-			generateThumbnails(canvasEl, frames, w, h, containerW);
-		});
-	});
-
-	function generateThumbnails(
-		canvasEl: HTMLCanvasElement,
-		frames: typeof project.frames,
-		srcW: number,
-		srcH: number,
-		containerW: number
-	) {
-		const tw = srcH > 0 ? Math.round((srcW / srcH) * STRIP_HEIGHT) : 36;
-		// How many thumbnails fit edge-to-edge
-		const count = Math.max(1, Math.ceil(containerW / tw));
-		const totalW = count * tw;
-
-		canvasEl.width = totalW;
-		canvasEl.height = STRIP_HEIGHT;
-
-		const ctx = canvasEl.getContext('2d');
-		if (!ctx) return;
-
-		ctx.fillStyle = '#18181b';
-		ctx.fillRect(0, 0, totalW, STRIP_HEIGHT);
-
-		// Sample frames evenly
-		const tmpCanvas = new OffscreenCanvas(srcW, srcH);
-		const tmpCtx = tmpCanvas.getContext('2d')!;
-
-		for (let i = 0; i < count; i++) {
-			const frameIdx = Math.min(
-				Math.round((i / Math.max(1, count - 1)) * (frames.length - 1)),
-				frames.length - 1
-			);
-			const frame = frames[frameIdx];
-			if (!frame) continue;
-
-			tmpCtx.putImageData(frame.imageData, 0, 0);
-			ctx.drawImage(tmpCanvas, i * tw, 0, tw, STRIP_HEIGHT);
-		}
-	}
 
 	// --- Scrubbing ---
 	function frameFromPointerX(clientX: number): number {
