@@ -66,6 +66,8 @@ let redoStack: State[] = [];
 let version = 0;
 /** Set while a GIF is still streaming in: total frame count and full duration. */
 let loading: { total: number; duration: number } | null = null;
+/** Bumped when a new import or reset arrives, so an in-progress stream can stop early. */
+let loadGeneration = 0;
 
 const encoded = new WeakMap<Pixels, EncodedFrame>();
 const encoding = new WeakMap<Pixels, ReturnType<Pool['run']>>();
@@ -278,7 +280,14 @@ function yieldToEventLoop() {
  * ~30 ms slices while the engine keeps serving playback/control messages.
  * Queued edits/exports wait for the import to finish.
  */
-async function loadGif(id: number, file: Blob, src: SourceInfo, ack: () => void) {
+async function loadGif(
+	id: number,
+	file: Blob,
+	src: SourceInfo,
+	ack: () => void,
+	generation: number
+) {
+	if (generation !== loadGeneration) return; // superseded before it started
 	const bytes = new Uint8Array(await file.arrayBuffer());
 	const dec = new GifDecoder(bytes, allocPixels);
 	const total = dec.frameCount;
@@ -308,6 +317,7 @@ async function loadGif(id: number, file: Blob, src: SourceInfo, ack: () => void)
 	try {
 		while (dec.decodedCount < total) {
 			await yieldToEventLoop();
+			if (generation !== loadGeneration) break; // superseded by a newer import/reset
 			const sliceEnd = performance.now() + 30;
 			do {
 				const f = dec.next();
@@ -811,11 +821,15 @@ function handle(id: number, req: EngineRequest) {
 		case 'trimBounds':
 			preview.setTrim(req.enabled, req.start, req.end);
 			return reply(id);
-		case 'loadGif':
-			return enqueue(id, (ack) => loadGif(id, req.file, req.source, ack));
+		case 'loadGif': {
+			const generation = ++loadGeneration;
+			return enqueue(id, (ack) => loadGif(id, req.file, req.source, ack, generation));
+		}
 		case 'loadImages':
+			loadGeneration++;
 			return enqueue(id, () => loadImages(id, req.files, req.fps, req.source));
 		case 'loadRaw':
+			loadGeneration++;
 			return enqueue(id, () =>
 				loadRaw(req.buffer, req.width, req.height, req.count, req.fps, req.source)
 			);
@@ -840,6 +854,7 @@ function handle(id: number, req: EngineRequest) {
 				redoStack = r;
 			});
 		case 'reset':
+			loadGeneration++;
 			return enqueue(id, () => {
 				source = null;
 				setState(null, { history: 'clear' });
