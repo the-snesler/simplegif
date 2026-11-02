@@ -188,8 +188,9 @@ function encodeFrame(px: Pixels, priority: Priority): Promise<EncodedFrame> {
 	return job.promise as Promise<EncodedFrame>;
 }
 
-async function encodeState(state: State, id?: number): Promise<Uint8Array> {
-	if (state.bytes) return state.bytes;
+/** Encoded GIF for a state, as chunks (header, per-frame GCE + image, trailer). */
+async function encodeStateParts(state: State, id?: number): Promise<Uint8Array[]> {
+	if (state.bytes) return [state.bytes];
 	const tick =
 		id !== undefined ? progressReporter(id, state.frames.length, 'Encoding GIF...') : null;
 	const chunks = await Promise.all(
@@ -206,6 +207,12 @@ async function encodeState(state: State, id?: number): Promise<Uint8Array> {
 		parts.push(encodeGce(f.delay, dispose, chunks[i].transparentIndex), chunks[i].image);
 	});
 	parts.push(GIF_TRAILER);
+	return parts;
+}
+
+async function encodeState(state: State, id?: number): Promise<Uint8Array> {
+	const parts = await encodeStateParts(state, id);
+	if (parts.length === 1) return parts[0];
 	const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
 	let o = 0;
 	for (const p of parts) {
@@ -840,8 +847,8 @@ function handle(id: number, req: EngineRequest) {
 		case 'export':
 			return enqueue(id, async () => {
 				if (!current) throw new Error('No project loaded');
-				const bytes = await encodeState(current, id);
-				return new Blob([bytes as BlobPart], { type: 'image/gif' });
+				const parts = await encodeStateParts(current, id);
+				return new Blob(parts as BlobPart[], { type: 'image/gif' });
 			});
 	}
 }

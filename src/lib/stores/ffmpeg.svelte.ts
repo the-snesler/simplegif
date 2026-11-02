@@ -3,6 +3,7 @@ import type { FFmpeg } from '@ffmpeg/ffmpeg';
 let instance = $state<FFmpeg | null>(null);
 let isLoading = $state(false);
 let isReady = $state(false);
+let loadPromise: Promise<FFmpeg> | null = null;
 
 export const ffmpegStore = {
 	get instance() {
@@ -15,25 +16,34 @@ export const ffmpegStore = {
 		return isReady;
 	},
 
-	async load(): Promise<FFmpeg> {
-		if (instance) return instance;
-		isLoading = true;
-
-		const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-		const { toBlobURL } = await import('@ffmpeg/util');
-
-		const ffmpeg = new FFmpeg();
-		const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
-
-		await ffmpeg.load({
-			coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-			wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-			workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript')
-		});
-
-		instance = ffmpeg;
-		isLoading = false;
-		isReady = true;
-		return ffmpeg;
+	/** Load ffmpeg.wasm (deduplicated; safe to call early to prefetch). */
+	load(): Promise<FFmpeg> {
+		loadPromise ??= (async () => {
+			isLoading = true;
+			try {
+				const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
+					import('@ffmpeg/ffmpeg'),
+					import('@ffmpeg/util')
+				]);
+				// Single-threaded core: the multi-threaded build was no faster in testing
+				// and intermittently stalled.
+				const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
+				const [coreURL, wasmURL] = await Promise.all([
+					toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+					toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
+				]);
+				const ffmpeg = new FFmpeg();
+				await ffmpeg.load({ coreURL, wasmURL });
+				instance = ffmpeg;
+				isReady = true;
+				return ffmpeg;
+			} catch (err) {
+				loadPromise = null;
+				throw err;
+			} finally {
+				isLoading = false;
+			}
+		})();
+		return loadPromise;
 	}
 };
