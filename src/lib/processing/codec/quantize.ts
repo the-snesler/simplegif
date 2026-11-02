@@ -28,34 +28,43 @@ const ALPHA_THRESHOLD = 128;
  * Index the frame losslessly if it has at most `maxColors` distinct opaque
  * colours (plus one slot for transparency, if needed). Returns null otherwise.
  */
-export function buildExactPalette(rgba: Uint8ClampedArray, maxColors: number): IndexedFrame | null {
+export function buildExactPalette(
+	rgba: Uint8ClampedArray<ArrayBufferLike>,
+	maxColors: number
+): IndexedFrame | null {
 	const pixelCount = rgba.length >> 2;
+	const px = new Uint32Array(rgba.buffer, rgba.byteOffset, pixelCount);
 	const indices = new Uint8Array(pixelCount);
-	// Open-addressing hash table: key = 0xRRGGBB + 1 (0 = empty), value = index
-	const TABLE = 1024;
-	const keys = new Int32Array(TABLE);
-	const vals = new Uint8Array(TABLE);
+	// Open-addressing hash: key = (RGB as 24-bit) + 1, 0 = empty
+	keys.fill(0);
 	const palette = new Uint8Array(256 * 3);
 	let count = 0;
 	let transparentIndex = -1;
-
-	let lastKey = -1;
+	let lastPixel = -1;
 	let lastIdx = 0;
-	for (let p = 0, o = 0; p < pixelCount; p++, o += 4) {
-		if (rgba[o + 3] < ALPHA_THRESHOLD) {
+
+	for (let p = 0; p < pixelCount; p++) {
+		const v = px[p];
+		if (v === lastPixel) {
+			indices[p] = lastIdx;
+			continue;
+		}
+		lastPixel = v;
+		const r = LE ? v & 0xff : v >>> 24;
+		const g = LE ? (v >>> 8) & 0xff : (v >>> 16) & 0xff;
+		const b = LE ? (v >>> 16) & 0xff : (v >>> 8) & 0xff;
+		const a = LE ? v >>> 24 : v & 0xff;
+		if (a < ALPHA_THRESHOLD) {
 			if (transparentIndex < 0) {
 				if (count >= 256) return null;
 				transparentIndex = count++;
 			}
-			indices[p] = transparentIndex;
-			continue;
-		}
-		const key = ((rgba[o] << 16) | (rgba[o + 1] << 8) | rgba[o + 2]) + 1;
-		if (key === lastKey) {
+			lastIdx = transparentIndex;
 			indices[p] = lastIdx;
 			continue;
 		}
-		let h = (Math.imul(key, 0x9e3779b1) >>> 22) & (TABLE - 1);
+		const key = ((r << 16) | (g << 8) | b) + 1;
+		let h = Math.imul(key, 0x9e3779b1) >>> (32 - HASH_BITS);
 		while (true) {
 			const k = keys[h];
 			if (k === key) {
@@ -66,21 +75,26 @@ export function buildExactPalette(rgba: Uint8ClampedArray, maxColors: number): I
 				if (count >= 256) return null;
 				keys[h] = key;
 				vals[h] = count;
-				palette[count * 3] = rgba[o];
-				palette[count * 3 + 1] = rgba[o + 1];
-				palette[count * 3 + 2] = rgba[o + 2];
+				palette[count * 3] = r;
+				palette[count * 3 + 1] = g;
+				palette[count * 3 + 2] = b;
 				lastIdx = count++;
 				break;
 			}
-			h = (h + 1) & (TABLE - 1);
+			h = (h + 1) & (HASH_SIZE - 1);
 		}
-		lastKey = key;
 		indices[p] = lastIdx;
 	}
 
 	if (count > maxColors) return null;
 	return { palette: palette.subarray(0, count * 3), colorCount: count, indices, transparentIndex };
 }
+
+const LE = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+const HASH_BITS = 12;
+const HASH_SIZE = 1 << HASH_BITS;
+const keys = new Int32Array(HASH_SIZE);
+const vals = new Uint8Array(HASH_SIZE);
 
 // ---------------------------------------------------------------------------
 // Wu quantizer
@@ -112,6 +126,7 @@ const mg = new Float64Array(TABLE_SIZE);
 const mb = new Float64Array(TABLE_SIZE);
 const m2 = new Float64Array(TABLE_SIZE);
 const tag = new Uint8Array(TABLE_SIZE);
+const lut15 = new Uint8Array(32768);
 const areaW = new Float64Array(SIDE);
 const areaR = new Float64Array(SIDE);
 const areaG = new Float64Array(SIDE);
@@ -277,7 +292,11 @@ function cut(set1: Box, set2: Box): boolean {
  * Quantize opaque pixels to at most `maxColors` colours (one fewer if the
  * frame has transparent pixels, which get their own index).
  */
-export function quantizeWu(rgba: Uint8ClampedArray, maxColors: number): IndexedFrame {
+export function quantizeWu(
+	rgba: Uint8ClampedArray<ArrayBufferLike>,
+	maxColors: number,
+	width = 0
+): IndexedFrame {
 	const pixelCount = rgba.length >> 2;
 	wt.fill(0);
 	mr.fill(0);
@@ -285,22 +304,37 @@ export function quantizeWu(rgba: Uint8ClampedArray, maxColors: number): IndexedF
 	mb.fill(0);
 	m2.fill(0);
 
-	// 1. Histogram (5 bits per channel, offset by 1 for the moment base row)
+	// 1. Histogram (5 bits per channel, offset by 1 for the moment base row).
+	// Large frames are sampled — ~256k pixels is plenty to place 256 colours.
+	const px = new Uint32Array(rgba.buffer, rgba.byteOffset, pixelCount);
 	let hasTransparent = false;
-	for (let o = 0; o < rgba.length; o += 4) {
-		if (rgba[o + 3] < ALPHA_THRESHOLD) {
+	let step = Math.max(1, Math.ceil(pixelCount / 262144));
+	if (step > 1 && width % step === 0) step++; // avoid sampling the same columns every row
+	for (let p = 0; p < pixelCount; p += step) {
+		const v = px[p];
+		const a = LE ? v >>> 24 : v & 0xff;
+		if (a < ALPHA_THRESHOLD) {
 			hasTransparent = true;
 			continue;
 		}
-		const r = rgba[o];
-		const g = rgba[o + 1];
-		const b = rgba[o + 2];
+		const r = LE ? v & 0xff : v >>> 24;
+		const g = LE ? (v >>> 8) & 0xff : (v >>> 16) & 0xff;
+		const b = LE ? (v >>> 16) & 0xff : (v >>> 8) & 0xff;
 		const i = ((r >> 3) + 1) * SIDE2 + ((g >> 3) + 1) * SIDE + (b >> 3) + 1;
 		wt[i] += 1;
 		mr[i] += r;
 		mg[i] += g;
 		mb[i] += b;
 		m2[i] += r * r + g * g + b * b;
+	}
+	if (step > 1 && !hasTransparent) {
+		// Sampling may miss sparse transparent pixels; check exhaustively (cheap)
+		for (let p = 0; p < pixelCount; p++) {
+			if ((LE ? px[p] >>> 24 : px[p] & 0xff) < ALPHA_THRESHOLD) {
+				hasTransparent = true;
+				break;
+			}
+		}
 	}
 
 	// 2. Cumulative moments
@@ -372,37 +406,75 @@ export function quantizeWu(rgba: Uint8ClampedArray, maxColors: number): IndexedF
 	// 4. Palette = mean colour of each box; tag table maps histogram cells → index
 	const palette = new Uint8Array((k + (hasTransparent ? 1 : 0)) * 3);
 	let count = 0;
-	for (let i = 0; i < k; i++) {
-		const box = boxes[i];
-		const w = vol(box, wt);
-		if (w <= 0) continue;
-		palette[count * 3] = Math.round(vol(box, mr) / w);
-		palette[count * 3 + 1] = Math.round(vol(box, mg) / w);
-		palette[count * 3 + 2] = Math.round(vol(box, mb) / w);
+	const tagBox = (box: Box, index: number) => {
 		for (let r = box.r0 + 1; r <= box.r1; r++) {
 			for (let g = box.g0 + 1; g <= box.g1; g++) {
 				const base = r * SIDE2 + g * SIDE;
-				tag.fill(count, base + box.b0 + 1, base + box.b1 + 1);
+				tag.fill(index, base + box.b0 + 1, base + box.b1 + 1);
 			}
 		}
+	};
+	const empty: Box[] = [];
+	for (let i = 0; i < k; i++) {
+		const box = boxes[i];
+		const w = vol(box, wt);
+		if (w <= 0) {
+			empty.push(box);
+			continue;
+		}
+		palette[count * 3] = Math.round(vol(box, mr) / w);
+		palette[count * 3 + 1] = Math.round(vol(box, mg) / w);
+		palette[count * 3 + 2] = Math.round(vol(box, mb) / w);
+		tagBox(box, count);
 		count++;
 	}
 	if (count === 0) {
 		// Fully transparent (or empty) frame: still need one opaque palette entry
 		count = 1;
 	}
+	// Boxes with no (sampled) pixels still cover colour space: map them to the
+	// palette entry nearest their centre so every cell has a valid index.
+	for (const box of empty) {
+		const cr = (box.r0 + box.r1) * 4;
+		const cg = (box.g0 + box.g1) * 4;
+		const cb = (box.b0 + box.b1) * 4;
+		let best = 0;
+		let bestD = Infinity;
+		for (let i = 0; i < count; i++) {
+			const dr = palette[i * 3] - cr;
+			const dg = palette[i * 3 + 1] - cg;
+			const db = palette[i * 3 + 2] - cb;
+			const d = dr * dr + dg * dg + db * db;
+			if (d < bestD) {
+				bestD = d;
+				best = i;
+			}
+		}
+		tagBox(box, best);
+	}
 	const transparentIndex = hasTransparent ? count++ : -1;
 
-	// 5. Map pixels
+	// 5. Map pixels through a compact 15-bit (5:5:5) lookup built from the tag table
+	for (let r = 0; r < 32; r++) {
+		for (let g = 0; g < 32; g++) {
+			const src = (r + 1) * SIDE2 + (g + 1) * SIDE + 1;
+			lut15.set(tag.subarray(src, src + 32), (r << 10) | (g << 5));
+		}
+	}
 	const indices = new Uint8Array(pixelCount);
-	for (let p = 0, o = 0; p < pixelCount; p++, o += 4) {
-		if (rgba[o + 3] < ALPHA_THRESHOLD) {
-			indices[p] = transparentIndex;
+	const t = transparentIndex;
+	for (let p = 0; p < pixelCount; p++) {
+		const v = px[p];
+		if (LE) {
+			indices[p] =
+				v >>> 24 < ALPHA_THRESHOLD
+					? t
+					: lut15[((v & 0xf8) << 7) | ((v >>> 6) & 0x3e0) | ((v >>> 19) & 0x1f)];
 		} else {
 			indices[p] =
-				tag[
-					((rgba[o] >> 3) + 1) * SIDE2 + ((rgba[o + 1] >> 3) + 1) * SIDE + (rgba[o + 2] >> 3) + 1
-				];
+				(v & 0xff) < ALPHA_THRESHOLD
+					? t
+					: lut15[((v >>> 17) & 0x7c00) | ((v >>> 14) & 0x3e0) | ((v >>> 11) & 0x1f)];
 		}
 	}
 
@@ -410,6 +482,10 @@ export function quantizeWu(rgba: Uint8ClampedArray, maxColors: number): IndexedF
 }
 
 /** Index a frame: lossless if possible, otherwise Wu quantization. */
-export function indexFrame(rgba: Uint8ClampedArray, maxColors: number): IndexedFrame {
-	return buildExactPalette(rgba, maxColors) ?? quantizeWu(rgba, maxColors);
+export function indexFrame(
+	rgba: Uint8ClampedArray<ArrayBufferLike>,
+	maxColors: number,
+	width = 0
+): IndexedFrame {
+	return buildExactPalette(rgba, maxColors) ?? quantizeWu(rgba, maxColors, width);
 }

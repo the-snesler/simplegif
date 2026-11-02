@@ -202,7 +202,7 @@ export interface EncodedFrame {
 }
 
 export function encodeRaster(src: Raster, maxColors: number): EncodedFrame {
-	const indexed = indexFrame(src.data, maxColors);
+	const indexed = indexFrame(src.data, maxColors, src.width);
 	return {
 		image: encodeFrameImage(indexed, src.width, src.height),
 		transparentIndex: indexed.transparentIndex

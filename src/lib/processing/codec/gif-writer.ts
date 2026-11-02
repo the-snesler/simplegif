@@ -6,9 +6,6 @@
  * lets the engine cache encoded frames across edits (reverse, trim, frame
  * rate, undo/redo…) and only re-encode frames whose pixels changed.
  */
-// gifenc ships no `exports` map; its LZW encoder is importable directly.
-// @ts-expect-error -- untyped deep import
-import lzwEncode from 'gifenc/src/lzwEncode.js';
 import type { IndexedFrame } from './quantize';
 
 class ByteStream {
@@ -33,14 +30,17 @@ class ByteStream {
 		this.ensure(length);
 		for (let i = 0; i < length; i++) this.buf[this.pos++] = data[offset + i];
 	}
-	/** Used by gifenc's LZW encoder */
-	writeBytesView(data: Uint8Array, offset = 0, length = data.byteLength) {
-		this.ensure(length);
-		this.buf.set(data.subarray(offset, offset + length), this.pos);
-		this.pos += length;
+	get position() {
+		return this.pos;
 	}
-	bytesView(): Uint8Array {
-		return this.buf.subarray(0, this.pos);
+	/** Ensure `extra` writable bytes and expose the raw buffer for direct writes. */
+	reserve(extra: number): { bytes: Uint8Array; offset: number } {
+		this.ensure(extra);
+		return { bytes: this.buf, offset: this.pos };
+	}
+	/** Advance the cursor after direct writes into a reserved region. */
+	commit(position: number) {
+		this.pos = position;
 	}
 	writeU16(v: number) {
 		this.writeByte(v & 0xff);
@@ -94,6 +94,113 @@ export function encodeGce(delayMs: number, dispose: number, transparentIndex: nu
 	]);
 }
 
+// ---------------------------------------------------------------------------
+// LZW encoder
+//
+// Dictionary lookups use a direct-indexed child table
+// (code * alphabetSize + symbol → child code) instead of hash probing. Entries
+// are stamped with a generation number so a CLEAR doesn't need to zero the
+// table: stale entries simply fail the generation check.
+// ---------------------------------------------------------------------------
+
+const MAX_CODES = 4096;
+let childTable = new Int32Array(0);
+let generation = 0;
+
+function lzwEncode(indices: Uint8Array, pixelCount: number, minCodeSize: number, out: ByteStream) {
+	const alphabet = 1 << minCodeSize;
+	const tableSize = MAX_CODES * alphabet;
+	if (childTable.length < tableSize) {
+		childTable = new Int32Array(tableSize);
+		generation = 0;
+	}
+	const table = childTable;
+	const clear = alphabet;
+	const eoi = clear + 1;
+
+	out.writeByte(minCodeSize);
+	// Output: data sub-blocks of up to 255 bytes, written straight into the
+	// stream's buffer. Worst case: one 12-bit code per pixel, plus CLEARs.
+	const dataBytes = Math.ceil(((pixelCount + (pixelCount >> 10) + 4) * 12) / 8);
+	const buf = out.reserve(dataBytes + Math.ceil(dataBytes / 255) + 16);
+	const bytes = buf.bytes;
+	let w = buf.offset;
+	let blockStart = w++; // length byte placeholder
+	let acc = 0;
+	let bits = 0;
+
+	let codeSize = minCodeSize + 1;
+	let next = eoi + 1;
+	if (++generation > 0x7ffff) {
+		table.fill(0);
+		generation = 1;
+	}
+	let gen = generation << 12;
+
+	const emit = (code: number) => {
+		acc |= code << bits;
+		bits += codeSize;
+		while (bits >= 8) {
+			bytes[w++] = acc & 0xff;
+			acc >>>= 8;
+			bits -= 8;
+			if (w - blockStart === 256) {
+				bytes[blockStart] = 255;
+				blockStart = w++;
+			}
+		}
+	};
+
+	emit(clear);
+	if (pixelCount === 0) {
+		emit(eoi);
+	} else {
+		let prefix = indices[0];
+		for (let i = 1; i < pixelCount; i++) {
+			const k = indices[i];
+			const slot = prefix * alphabet + k;
+			const entry = table[slot];
+			if (entry >>> 12 === generation) {
+				prefix = entry & 0xfff;
+				continue;
+			}
+			emit(prefix);
+			if (next < MAX_CODES) {
+				table[slot] = gen | next;
+				next++;
+				if (next === (1 << codeSize) + 1 && codeSize < 12) codeSize++;
+			} else {
+				emit(clear);
+				codeSize = minCodeSize + 1;
+				next = eoi + 1;
+				if (++generation > 0x7ffff) {
+					table.fill(0);
+					generation = 1;
+				}
+				gen = generation << 12;
+			}
+			prefix = k;
+		}
+		emit(prefix);
+		emit(eoi);
+	}
+	if (bits > 0) {
+		bytes[w++] = acc & 0xff;
+		if (w - blockStart === 256) {
+			bytes[blockStart] = 255;
+			blockStart = w++;
+		}
+	}
+	const tail = w - blockStart - 1;
+	if (tail > 0) {
+		bytes[blockStart] = tail;
+		bytes[w++] = 0; // block terminator
+	} else {
+		bytes[blockStart] = 0; // empty block doubles as terminator
+	}
+	out.commit(w);
+}
+
 /** Image descriptor + local colour table + LZW-compressed pixels for one full-canvas frame. */
 export function encodeFrameImage(frame: IndexedFrame, width: number, height: number): Uint8Array {
 	const bits = tableBits(frame.colorCount);
@@ -111,13 +218,8 @@ export function encodeFrameImage(frame: IndexedFrame, width: number, height: num
 		s.writeByte(0);
 		s.writeByte(0);
 	}
-	lzwEncode(width, height, frame.indices, bits, s, accum, htab, codetab);
+	lzwEncode(frame.indices, width * height, Math.max(2, bits), s);
 	return s.bytes();
 }
-
-// LZW scratch tables (shared across calls on this thread)
-const accum = new Uint8Array(256);
-const htab = new Int32Array(5003);
-const codetab = new Int32Array(5003);
 
 export const GIF_TRAILER = new Uint8Array([0x3b]);
