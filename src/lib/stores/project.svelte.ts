@@ -12,6 +12,7 @@ let meta = $state.raw<ProjectMeta>({
 	frameRate: 10,
 	frameCount: 0,
 	duration: 0,
+	decoding: false,
 	canUndo: false,
 	canRedo: false,
 	version: 0
@@ -38,6 +39,10 @@ export const project = {
 	},
 	get duration() {
 		return meta.duration;
+	},
+	/** Frames are still streaming in from the engine */
+	get decoding() {
+		return meta.decoding;
 	},
 	get canUndo() {
 		return meta.canUndo;

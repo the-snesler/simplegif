@@ -69,6 +69,8 @@ export interface ProjectMeta {
 	frameCount: number;
 	/** Total duration in ms */
 	duration: number;
+	/** True while frames are still being decoded in the background */
+	decoding: boolean;
 	canUndo: boolean;
 	canRedo: boolean;
 	/** Monotonic version, bumps on every state change */

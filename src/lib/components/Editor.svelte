@@ -49,7 +49,10 @@
 	});
 </script>
 
-<div class="flex h-full flex-1 flex-col overflow-y-scroll">
+<div
+	class="flex h-full flex-1 flex-col overflow-y-scroll"
+	data-engine={project.decoding ? 'decoding' : project.isLoaded ? 'ready' : 'empty'}
+>
 	<div class="flex min-h-96 flex-1 flex-col">
 		{#if !project.isLoaded}
 			<DropZone />

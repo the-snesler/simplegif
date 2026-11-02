@@ -52,6 +52,9 @@
 			<div class="flex gap-3">
 				<span>{project.width}&times;{project.height}</span>
 				<span>{project.frameCount} frames</span>
+				{#if project.decoding}
+					<span class="text-amber-400">decoding…</span>
+				{/if}
 				{#if project.sourceFile}
 					<span>{formatFileSize(project.sourceFile.size)}</span>
 				{/if}

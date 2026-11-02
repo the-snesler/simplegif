@@ -5,9 +5,10 @@
 import type { CropRect, RotateOptions } from '$lib/types';
 import { indexFrame } from '$lib/processing/codec/quantize';
 import { encodeFrameImage } from '$lib/processing/codec/gif-writer';
+import { allocPixels, clonePixels, type PixelArray } from './pixels';
 
 export interface Raster {
-	data: Uint8ClampedArray<ArrayBuffer>;
+	data: PixelArray;
 	width: number;
 	height: number;
 }
@@ -17,8 +18,8 @@ export type PixelOp =
 	| { kind: 'resize'; width: number; height: number }
 	| { kind: 'rotate'; options: RotateOptions }
 	| { kind: 'posterize'; maxColors: number }
-	| { kind: 'diffTransparent'; prev: Uint8ClampedArray<ArrayBuffer>; threshold: number }
-	| { kind: 'composite'; base: Uint8ClampedArray<ArrayBuffer> };
+	| { kind: 'diffTransparent'; prev: PixelArray; threshold: number }
+	| { kind: 'composite'; base: PixelArray };
 
 // Reusable canvases keyed by size (per thread)
 const canvases = new Map<string, OffscreenCanvasRenderingContext2D>();
@@ -33,21 +34,15 @@ function ctx2d(w: number, h: number, slot: string): OffscreenCanvasRenderingCont
 	return ctx;
 }
 
-function sourceCanvas(src: Raster): OffscreenCanvas {
-	const ctx = ctx2d(src.width, src.height, 'src');
-	ctx.putImageData(new ImageData(src.data, src.width, src.height), 0, 0);
-	return ctx.canvas;
-}
-
 function readBack(ctx: OffscreenCanvasRenderingContext2D, w: number, h: number): Raster {
-	return { data: ctx.getImageData(0, 0, w, h).data, width: w, height: h };
+	return { data: clonePixels(ctx.getImageData(0, 0, w, h).data), width: w, height: h };
 }
 
 export function applyPixelOp(src: Raster, op: PixelOp): Raster {
 	switch (op.kind) {
 		case 'crop': {
 			const { x, y, width, height } = op.rect;
-			const out = new Uint8ClampedArray(width * height * 4);
+			const out = allocPixels(width * height * 4);
 			// Pure memory copy of the intersecting rows (pixels outside the source stay transparent)
 			const x0 = Math.max(0, x);
 			const x1 = Math.min(src.width, x + width);
@@ -61,21 +56,17 @@ export function applyPixelOp(src: Raster, op: PixelOp): Raster {
 			}
 			return { data: out, width, height };
 		}
-		case 'resize': {
-			const ctx = ctx2d(op.width, op.height, 'dst');
-			ctx.clearRect(0, 0, op.width, op.height);
-			ctx.drawImage(sourceCanvas(src), 0, 0, op.width, op.height);
-			return readBack(ctx, op.width, op.height);
-		}
+		case 'resize':
+			return resizeBilinear(src, op.width, op.height);
 		case 'rotate':
 			return rotate(src, op.options);
 		case 'posterize': {
-			if (op.maxColors >= 256) return { ...src, data: src.data.slice() };
+			if (op.maxColors >= 256) return { ...src, data: clonePixels(src.data) };
 			const levels = Math.max(2, Math.round(Math.pow(op.maxColors, 1 / 3)));
 			const step = 255 / (levels - 1);
 			const lut = new Uint8Array(256);
 			for (let v = 0; v < 256; v++) lut[v] = Math.round(Math.round(v / step) * step);
-			const d = src.data.slice();
+			const d = clonePixels(src.data);
 			for (let j = 0; j < d.length; j += 4) {
 				d[j] = lut[d[j]];
 				d[j + 1] = lut[d[j + 1]];
@@ -84,7 +75,7 @@ export function applyPixelOp(src: Raster, op: PixelOp): Raster {
 			return { ...src, data: d };
 		}
 		case 'diffTransparent': {
-			const d = src.data.slice();
+			const d = clonePixels(src.data);
 			const p = op.prev;
 			const t = op.threshold;
 			for (let j = 0; j < d.length; j += 4) {
@@ -100,7 +91,7 @@ export function applyPixelOp(src: Raster, op: PixelOp): Raster {
 		}
 		case 'composite': {
 			// Draw `src` over `base` (GIF keep-disposal semantics: transparent pixels show base)
-			const d = op.base.slice();
+			const d = clonePixels(op.base);
 			const s = src.data;
 			for (let j = 0; j < d.length; j += 4) {
 				if (s[j + 3] >= 128) {
@@ -115,6 +106,56 @@ export function applyPixelOp(src: Raster, op: PixelOp): Raster {
 	}
 }
 
+/**
+ * Bilinear resample with premultiplied-alpha weighting — the same filter the
+ * canvas uses at the default smoothing quality, without the
+ * putImageData/getImageData round trip (and it reads shared memory directly).
+ */
+function resizeBilinear(src: Raster, dw: number, dh: number): Raster {
+	const { data: s, width: w, height: h } = src;
+	const out = allocPixels(dw * dh * 4);
+	const sx = w / dw;
+	const sy = h / dh;
+	const xa = new Int32Array(dw);
+	const xb = new Int32Array(dw);
+	const fx = new Float32Array(dw);
+	for (let x = 0; x < dw; x++) {
+		const f = Math.max(0, (x + 0.5) * sx - 0.5);
+		const x0 = Math.min(w - 1, Math.floor(f));
+		xa[x] = x0 * 4;
+		xb[x] = Math.min(w - 1, x0 + 1) * 4;
+		fx[x] = f - x0;
+	}
+	let o = 0;
+	for (let y = 0; y < dh; y++) {
+		const f = Math.max(0, (y + 0.5) * sy - 0.5);
+		const y0 = Math.min(h - 1, Math.floor(f));
+		const y1 = Math.min(h - 1, y0 + 1);
+		const wy = f - y0;
+		const r0 = y0 * w * 4;
+		const r1 = y1 * w * 4;
+		for (let x = 0; x < dw; x++, o += 4) {
+			const wx = fx[x];
+			const a = r0 + xa[x];
+			const b = r0 + xb[x];
+			const c = r1 + xa[x];
+			const d = r1 + xb[x];
+			const A00 = s[a + 3] * (1 - wx) * (1 - wy);
+			const A10 = s[b + 3] * wx * (1 - wy);
+			const A01 = s[c + 3] * (1 - wx) * wy;
+			const A11 = s[d + 3] * wx * wy;
+			const A = A00 + A10 + A01 + A11;
+			if (A <= 0) continue; // fully transparent (buffer is zero-initialized)
+			const inv = 1 / A;
+			out[o] = (s[a] * A00 + s[b] * A10 + s[c] * A01 + s[d] * A11) * inv;
+			out[o + 1] = (s[a + 1] * A00 + s[b + 1] * A10 + s[c + 1] * A01 + s[d + 1] * A11) * inv;
+			out[o + 2] = (s[a + 2] * A00 + s[b + 2] * A10 + s[c + 2] * A01 + s[d + 2] * A11) * inv;
+			out[o + 3] = A;
+		}
+	}
+	return { data: out, width: dw, height: dh };
+}
+
 /** Lossless 90° rotations and flips via index remapping (no canvas resampling). */
 function rotate(src: Raster, o: RotateOptions): Raster {
 	const { width: w, height: h } = src;
@@ -122,8 +163,8 @@ function rotate(src: Raster, o: RotateOptions): Raster {
 	const ow = swap ? h : w;
 	const oh = swap ? w : h;
 	const s32 = new Uint32Array(src.data.buffer, src.data.byteOffset, w * h);
-	const out = new Uint8ClampedArray(ow * oh * 4);
-	const o32 = new Uint32Array(out.buffer);
+	const out = allocPixels(ow * oh * 4);
+	const o32 = new Uint32Array(out.buffer, out.byteOffset, ow * oh);
 	// Matches the previous canvas implementation: translate to centre, rotate, then scale(flip).
 	for (let y = 0; y < h; y++) {
 		for (let x = 0; x < w; x++) {

@@ -19,7 +19,8 @@ import type {
 import type { PixelOp, Raster } from './frame-ops';
 import { applyPixelOp, type EncodedFrame } from './frame-ops';
 import { Cancelled, Pool, type Priority } from './pool';
-import { decodeGifBytes } from '$lib/processing/codec/gif-decoder';
+import { allocPixels, toImageData, type PixelArray } from './pixels';
+import { decodeGifBytes, GifDecoder } from '$lib/processing/codec/gif-decoder';
 import { encodeGce, encodeGifHeader, GIF_TRAILER } from '$lib/processing/codec/gif-writer';
 import type { OptimizeOptions } from '$lib/types';
 
@@ -29,7 +30,7 @@ declare const self: DedicatedWorkerGlobalScope;
 
 /** Immutable pixel buffer. Object identity is the cache key for encoded data. */
 interface Pixels {
-	readonly data: Uint8ClampedArray<ArrayBuffer>;
+	readonly data: PixelArray;
 	readonly width: number;
 	readonly height: number;
 }
@@ -63,6 +64,8 @@ let current: State | null = null;
 let undoStack: State[] = [];
 let redoStack: State[] = [];
 let version = 0;
+/** Set while a GIF is still streaming in: total frame count and full duration. */
+let loading: { total: number; duration: number } | null = null;
 
 const encoded = new WeakMap<Pixels, EncodedFrame>();
 const encoding = new WeakMap<Pixels, ReturnType<Pool['run']>>();
@@ -86,8 +89,9 @@ function meta(): ProjectMeta {
 		width: current?.width ?? 0,
 		height: current?.height ?? 0,
 		frameRate: current?.frameRate ?? 10,
-		frameCount: current?.frames.length ?? 0,
-		duration: current?.frames.reduce((s, f) => s + f.delay, 0) ?? 0,
+		frameCount: loading?.total ?? current?.frames.length ?? 0,
+		duration: loading?.duration ?? current?.frames.reduce((s, f) => s + f.delay, 0) ?? 0,
+		decoding: loading !== null,
 		canUndo: undoStack.length > 0,
 		canRedo: redoStack.length > 0,
 		version
@@ -230,7 +234,7 @@ function stateFromDecoded(
 	decoded: {
 		width: number;
 		height: number;
-		frames: { data: Uint8ClampedArray<ArrayBuffer>; delay: number }[];
+		frames: { data: PixelArray; delay: number }[];
 	},
 	frameRate: number,
 	bytes: Uint8Array | null
@@ -250,22 +254,81 @@ function stateFromDecoded(
 
 // ------------------------------------------------------------------ loading
 
-async function loadGif(id: number, file: Blob, src: SourceInfo) {
+/** Zero-delay yield to the event loop (lets control messages and playback run). */
+const yieldChannel = new MessageChannel();
+const yieldQueue: (() => void)[] = [];
+yieldChannel.port1.onmessage = () => yieldQueue.shift()?.();
+function yieldToEventLoop() {
+	return new Promise<void>((resolve) => {
+		yieldQueue.push(resolve);
+		yieldChannel.port2.postMessage(null);
+	});
+}
+
+/**
+ * Streaming GIF import: the request is acknowledged (and the preview starts
+ * playing) as soon as the first frame is decoded; remaining frames decode in
+ * ~30 ms slices while the engine keeps serving playback/control messages.
+ * Queued edits/exports wait for the import to finish.
+ */
+async function loadGif(id: number, file: Blob, src: SourceInfo, ack: () => void) {
 	const bytes = new Uint8Array(await file.arrayBuffer());
-	let lastPost = 0;
-	const decoded = decodeGifBytes(bytes, (i, total) => {
-		const now = performance.now();
-		if (now - lastPost > 50) {
-			lastPost = now;
-			post({ type: 'progress', id, pct: ((i + 1) / total) * 100, text: 'Decoding GIF...' });
-		}
-	});
-	if (decoded.frames.length === 0) throw new Error('GIF has no frames');
-	const avgDelay = decoded.frames.reduce((s, f) => s + f.delay, 0) / decoded.frames.length;
+	const dec = new GifDecoder(bytes, allocPixels);
+	const total = dec.frameCount;
+	if (total === 0) throw new Error('GIF has no frames');
+	const duration = dec.delays.reduce((a, b) => a + b, 0);
+	const frames: Frame[] = [];
+	let state: State = {
+		width: dec.width,
+		height: dec.height,
+		frameRate: Math.round(1000 / (duration / total || 100)),
+		bytes,
+		frames
+	};
+	const push = (f: { data: PixelArray; delay: number }) =>
+		frames.push({
+			px: { data: f.data, width: dec.width, height: dec.height },
+			delay: f.delay,
+			keep: false
+		});
+
+	push(dec.next()!);
 	source = src;
-	setState(stateFromDecoded(decoded, Math.round(1000 / (avgDelay || 100)), bytes), {
-		history: 'clear'
-	});
+	loading = total > 1 ? { total, duration } : null;
+	setState(state, { history: 'clear' });
+	ack();
+
+	try {
+		while (dec.decodedCount < total) {
+			await yieldToEventLoop();
+			const sliceEnd = performance.now() + 30;
+			do {
+				const f = dec.next();
+				if (!f) break;
+				push(f);
+			} while (performance.now() < sliceEnd);
+			post({
+				type: 'progress',
+				id,
+				pct: (dec.decodedCount / total) * 100,
+				text: 'Decoding GIF...'
+			});
+		}
+	} catch (err) {
+		// Truncated/corrupt tail: keep what decoded (like browsers do). The
+		// original bytes no longer describe this state, so drop them.
+		console.warn(`GIF decode stopped at frame ${frames.length}/${total}:`, err);
+		if (current === state) {
+			state = { ...state, bytes: null };
+			current = state;
+		}
+	} finally {
+		loading = null;
+		version++;
+		post({ type: 'meta', meta: meta() });
+		strip.render();
+		schedulePreencode();
+	}
 }
 
 async function loadImages(id: number, files: Blob[], fps: number, src: SourceInfo) {
@@ -309,7 +372,8 @@ function loadRaw(
 	const frames: Frame[] = [];
 	for (let i = 0; i < count; i++) {
 		// Copy into its own buffer so each frame can be cloned/transferred independently
-		const data = all.slice(i * frameBytes, (i + 1) * frameBytes);
+		const data = allocPixels(frameBytes);
+		data.set(all.subarray(i * frameBytes, (i + 1) * frameBytes));
 		frames.push({ px: { data, width, height }, delay, keep: false });
 	}
 	if (frames.length === 0) throw new Error('Video produced no frames');
@@ -319,11 +383,7 @@ function loadRaw(
 
 // ------------------------------------------------------------------ edits
 
-function framesSimilar(
-	a: Uint8ClampedArray<ArrayBuffer>,
-	b: Uint8ClampedArray<ArrayBuffer>,
-	threshold: number
-) {
+function framesSimilar(a: PixelArray, b: PixelArray, threshold: number) {
 	if (a.length !== b.length) return false;
 	const pixelCount = a.length / 4;
 	const stride = Math.max(1, Math.floor(pixelCount / Math.min(pixelCount, 5000)));
@@ -458,7 +518,7 @@ async function edit(id: number, e: EditOp): Promise<EditResult | undefined> {
 			post({ type: 'progress', id, pct: 25, text: 'Running gifsicle...' });
 			const output = await pool.run({ t: 'gifsicle', bytes: input, options: e.options }).promise;
 			post({ type: 'progress', id, pct: 75, text: 'Updating preview...' });
-			const decoded = decodeGifBytes(output);
+			const decoded = decodeGifBytes(output, allocPixels);
 			const state = stateFromDecoded(decoded, s.frameRate, output);
 			result = { beforeSize: input.length, afterSize: output.length };
 			setState(state, { history: 'push' });
@@ -487,16 +547,21 @@ const preview = (() => {
 	let nextAt = 0;
 	const trim = { enabled: false, start: 0, end: 0 };
 	// One-entry cache of the composited buffer for keep-frames
-	let comp: { version: number; index: number; data: Uint8ClampedArray<ArrayBuffer> } | null = null;
+	let comp: { version: number; index: number; data: PixelArray } | null = null;
 
+	/** Frames available to display (grows while a GIF streams in) */
 	function frameCount() {
 		return current?.frames.length ?? 0;
 	}
 
-	function composited(i: number): Uint8ClampedArray<ArrayBuffer> {
+	function totalFrames() {
+		return loading?.total ?? frameCount();
+	}
+
+	function composited(i: number): PixelArray {
 		const frames = current!.frames;
 		if (!frames[i].keep) return frames[i].px.data;
-		let base: Uint8ClampedArray<ArrayBuffer>;
+		let base: PixelArray;
 		let start: number;
 		if (comp && comp.version === version && comp.index === i - 1) {
 			base = comp.data;
@@ -520,7 +585,7 @@ const preview = (() => {
 		if (canvas.width !== s.width) canvas.width = s.width;
 		if (canvas.height !== s.height) canvas.height = s.height;
 		const i = Math.min(index, s.frames.length - 1);
-		ctx.putImageData(new ImageData(composited(i), s.width, s.height), 0, 0);
+		ctx.putImageData(toImageData(composited(i), s.width, s.height), 0, 0);
 	}
 
 	function announce() {
@@ -551,7 +616,7 @@ const preview = (() => {
 	}
 
 	function play() {
-		if (frameCount() <= 1) {
+		if (totalFrames() <= 1) {
 			playing = false;
 			announce();
 			return;
@@ -596,7 +661,7 @@ const preview = (() => {
 		play,
 		pause,
 		seek(frame: number) {
-			index = Math.max(0, Math.min(frameCount() - 1, frame));
+			index = Math.max(0, Math.min(totalFrames() - 1, frame));
 			render();
 			if (playing) nextAt = performance.now() + delayOf(index);
 			announce();
@@ -620,7 +685,7 @@ const strip = (() => {
 	async function render() {
 		const s = current;
 		const my = ++token;
-		if (!canvas || !s || width === 0 || s.frames.length === 0) return;
+		if (!canvas || !s || width === 0 || s.frames.length === 0 || loading) return;
 		const tw = s.height > 0 ? Math.max(1, Math.round((s.width / s.height) * HEIGHT)) : 36;
 		const count = Math.max(1, Math.ceil(width / tw));
 		const picks = Array.from({ length: count }, (_, i) =>
@@ -629,15 +694,17 @@ const strip = (() => {
 				s.frames.length - 1
 			)
 		);
-		const bitmaps = await Promise.all(
-			picks.map((fi) =>
-				createImageBitmap(new ImageData(s.frames[fi].px.data, s.width, s.height), {
+		// Sequential: toImageData reuses a scratch buffer for shared memory
+		const bitmaps: ImageBitmap[] = [];
+		for (const fi of picks) {
+			bitmaps.push(
+				await createImageBitmap(toImageData(s.frames[fi].px.data, s.width, s.height), {
 					resizeWidth: tw,
 					resizeHeight: HEIGHT,
 					resizeQuality: 'medium'
 				})
-			)
-		);
+			);
+		}
 		if (my !== token || !canvas) {
 			bitmaps.forEach((b) => b.close());
 			return;
@@ -673,19 +740,28 @@ const strip = (() => {
 let queue: Promise<unknown> = Promise.resolve();
 
 /** Serialize state-changing requests; control messages are handled immediately. */
-function enqueue(id: number, fn: () => Promise<unknown> | unknown) {
+function enqueue(id: number, fn: (ack: () => void) => Promise<unknown> | unknown) {
 	queue = queue.then(async () => {
+		let acked = false;
+		// Lets a long request (streaming import) reply early while still holding the queue
+		const ack = () => {
+			if (acked) return;
+			acked = true;
+			post({ type: 'reply', id, ok: true });
+		};
 		try {
-			const result = await fn();
-			post({ type: 'reply', id, ok: true, result });
+			const result = await fn(ack);
+			if (!acked) post({ type: 'reply', id, ok: true, result });
 		} catch (err) {
 			console.error(err);
-			post({
-				type: 'reply',
-				id,
-				ok: false,
-				error: err instanceof Error ? err.message : String(err)
-			});
+			if (!acked) {
+				post({
+					type: 'reply',
+					id,
+					ok: false,
+					error: err instanceof Error ? err.message : String(err)
+				});
+			}
 		}
 	});
 }
@@ -729,7 +805,7 @@ function handle(id: number, req: EngineRequest) {
 			preview.setTrim(req.enabled, req.start, req.end);
 			return reply(id);
 		case 'loadGif':
-			return enqueue(id, () => loadGif(id, req.file, req.source));
+			return enqueue(id, (ack) => loadGif(id, req.file, req.source, ack));
 		case 'loadImages':
 			return enqueue(id, () => loadImages(id, req.files, req.fps, req.source));
 		case 'loadRaw':
