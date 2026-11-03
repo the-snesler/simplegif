@@ -57,7 +57,7 @@ interface State {
 }
 
 const MAX_COLORS = 256;
-const PREENCODE_DELAY_MS = 250;
+const PREENCODE_DELAY_MS = 500;
 
 const pool = new Pool();
 let source: SourceInfo | null = null;

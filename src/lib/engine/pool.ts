@@ -121,8 +121,24 @@ export class Pool {
 		}
 	}
 
+	/**
+	 * Speculative (low-priority) work may only occupy half the helpers, so a
+	 * user action arriving mid pre-encode finds idle cores immediately.
+	 */
+	private lowLimit() {
+		return Math.max(1, Math.floor(this.helpers.filter((h) => !h.dead).length / 2));
+	}
+
+	private runningLow() {
+		let n = 0;
+		for (const { job } of this.running.values()) if (job.priority === 'low') n++;
+		return n;
+	}
+
 	private next(): InternalJob | undefined {
-		return this.high.shift() ?? this.low.shift();
+		if (this.high.length) return this.high.shift();
+		if (this.low.length && this.runningLow() < this.lowLimit()) return this.low.shift();
+		return undefined;
 	}
 
 	private pump() {

@@ -10,6 +10,8 @@ import { playback } from '$lib/stores/playback.svelte';
 type Progress = (pct: number, text?: string) => void;
 
 interface Pending {
+	type: string;
+	t0: number;
 	resolve: (v: unknown) => void;
 	reject: (e: Error) => void;
 	onProgress?: Progress;
@@ -30,6 +32,8 @@ function onEvent(ev: EngineEvent) {
 		case 'reply': {
 			const p = pending.get(ev.id);
 			if (!p) return;
+			if ((globalThis as { __debugEngine?: boolean }).__debugEngine)
+				console.log(`[engine] ${p.type} ${(performance.now() - p.t0).toFixed(1)}ms`);
 			pending.delete(ev.id);
 			if (ev.ok) p.resolve(ev.result);
 			else p.reject(new Error(ev.error));
@@ -83,7 +87,13 @@ function send<T = void>(req: EngineRequest, transfer: Transferable[] = [], onPro
 	const w = ensureEngine();
 	const id = nextId++;
 	return new Promise<T>((resolve, reject) => {
-		pending.set(id, { resolve: resolve as (v: unknown) => void, reject, onProgress });
+		pending.set(id, {
+			type: req.type,
+			t0: performance.now(),
+			resolve: resolve as (v: unknown) => void,
+			reject,
+			onProgress
+		});
 		w.postMessage({ id, req }, transfer);
 	});
 }

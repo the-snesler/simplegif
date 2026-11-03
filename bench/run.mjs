@@ -102,6 +102,7 @@ async function measureCycle(url, fixture) {
 	r.importReady = Math.round(performance.now() - t0);
 	r.downloadUnedited = await timed(download);
 
+	if (isVideo) await nav('Resize');
 	await page.getByRole('button', { name: '50%' }).click();
 	r.resize50 = await timed(async () => {
 		await applyBtn().click();

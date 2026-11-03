@@ -140,10 +140,22 @@ function resizeBilinear(src: Raster, dw: number, dh: number): Raster {
 			const b = r0 + xb[x];
 			const c = r1 + xa[x];
 			const d = r1 + xb[x];
-			const A00 = s[a + 3] * (1 - wx) * (1 - wy);
-			const A10 = s[b + 3] * wx * (1 - wy);
-			const A01 = s[c + 3] * (1 - wx) * wy;
-			const A11 = s[d + 3] * wx * wy;
+			const w00 = (1 - wx) * (1 - wy);
+			const w10 = wx * (1 - wy);
+			const w01 = (1 - wx) * wy;
+			const w11 = wx * wy;
+			if ((s[a + 3] & s[b + 3] & s[c + 3] & s[d + 3]) === 255) {
+				// Fast path: all four neighbours opaque, plain weighted average
+				out[o] = s[a] * w00 + s[b] * w10 + s[c] * w01 + s[d] * w11;
+				out[o + 1] = s[a + 1] * w00 + s[b + 1] * w10 + s[c + 1] * w01 + s[d + 1] * w11;
+				out[o + 2] = s[a + 2] * w00 + s[b + 2] * w10 + s[c + 2] * w01 + s[d + 2] * w11;
+				out[o + 3] = 255;
+				continue;
+			}
+			const A00 = s[a + 3] * w00;
+			const A10 = s[b + 3] * w10;
+			const A01 = s[c + 3] * w01;
+			const A11 = s[d + 3] * w11;
 			const A = A00 + A10 + A01 + A11;
 			if (A <= 0) continue; // fully transparent (buffer is zero-initialized)
 			const inv = 1 / A;
