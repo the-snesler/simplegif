@@ -27,3 +27,5 @@ vite.config.ts.timestamp-*
 e2e/fixtures/out
 bench/results/*.local.json
 test-results
+bench/*.local.*
+test-results-*.log
