@@ -65,7 +65,9 @@ async function demuxMp4(bytes: Uint8Array): Promise<DemuxedVideo | null> {
 			description = new Uint8Array(ds.buffer as ArrayBuffer, 8); // skip box header
 		}
 		const m = track.matrix as unknown as ArrayLike<number>;
-		const angle = (Math.round((Math.atan2(m[1], m[0]) * 180) / Math.PI) + 360) % 360;
+		// Mirrored matrices (negative determinant) aren't a pure rotation; ignore them
+		const mirrored = m[0] * m[4] - m[1] * m[3] < 0;
+		const angle = mirrored ? 0 : (Math.round((Math.atan2(m[1], m[0]) * 180) / Math.PI) + 360) % 360;
 		result = {
 			codec: track.codec,
 			description,
@@ -144,21 +146,23 @@ export async function decodeVideo(
 	let last: VideoFrame | null = null;
 	let failure: unknown = null;
 
+	// Output size is fixed by the first frame; later frames with a different
+	// resolution (e.g. MediaRecorder window capture) are scaled to it, like ffmpeg.
+	let baseW = 0;
+	let baseH = 0;
 	const convert = (frame: VideoFrame): PixelArray => {
 		if (!ctx) {
-			const vw = frame.visibleRect?.width ?? frame.displayWidth;
-			const vh = frame.visibleRect?.height ?? frame.displayHeight;
+			baseW = frame.visibleRect?.width ?? frame.displayWidth;
+			baseH = frame.visibleRect?.height ?? frame.displayHeight;
 			const swap = video.rotation === 90 || video.rotation === 270;
-			width = swap ? vh : vw;
-			height = swap ? vw : vh;
+			width = swap ? baseH : baseW;
+			height = swap ? baseW : baseH;
 			ctx = new OffscreenCanvas(width, height).getContext('2d', { willReadFrequently: true })!;
 		}
-		const vw = frame.visibleRect?.width ?? frame.displayWidth;
-		const vh = frame.visibleRect?.height ?? frame.displayHeight;
 		ctx.save();
 		ctx.translate(width / 2, height / 2);
 		ctx.rotate((video.rotation * Math.PI) / 180);
-		ctx.drawImage(frame, -vw / 2, -vh / 2, vw, vh);
+		ctx.drawImage(frame, -baseW / 2, -baseH / 2, baseW, baseH);
 		ctx.restore();
 		return clonePixels(ctx.getImageData(0, 0, width, height).data);
 	};

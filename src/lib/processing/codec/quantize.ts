@@ -309,7 +309,9 @@ export function quantizeWu(
 	const px = new Uint32Array(rgba.buffer, rgba.byteOffset, pixelCount);
 	let hasTransparent = false;
 	let step = Math.max(1, Math.ceil(pixelCount / 262144));
-	if (step > 1 && width % step === 0) step++; // avoid sampling the same columns every row
+	// A stride sharing a factor with the width would only ever sample some columns
+	const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+	while (step > 1 && width > 0 && gcd(step, width) > 1) step++;
 	for (let p = 0; p < pixelCount; p += step) {
 		const v = px[p];
 		const a = LE ? v >>> 24 : v & 0xff;

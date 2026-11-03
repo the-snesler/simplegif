@@ -21,6 +21,10 @@ q -f lavfi -i "testsrc2=s=640x360:r=30:d=3" -c:v libvpx-vp9 -b:v 1M -deadline re
 q -f lavfi -i "testsrc2=s=320x240:r=25:d=2" -c:v libvpx -b:v 1M -deadline realtime $O/clip-vp8.webm
 q -i $O/clip.mp4 -c copy -metadata:s:v:0 rotate=90 $O/clip-rotated.mp4
 q -f lavfi -i "testsrc2=s=320x240:r=25:d=2" -c:v mpeg4 $O/clip.avi
+# H.264 with B-frames in Matroska (decode order != presentation order)
+q -f lavfi -i "testsrc2=s=320x240:r=30:d=3" -c:v libx264 -bf 3 -pix_fmt yuv420p $O/clip-bframes.mkv
+# Not a video at all (exercises the failure path)
+head -c 20000 /dev/urandom > $O/junk.mp4
 # Image sequence + single image
 q -f lavfi -i "testsrc2=s=320x240:r=10:d=2" $O/seq/frame_%02d.png
 q -f lavfi -i "testsrc2=s=300x200:r=1:d=1" -frames:v 1 $O/single.png
@@ -28,3 +32,4 @@ q -f lavfi -i "testsrc2=s=300x200:r=1:d=1" -frames:v 1 $O/single.png
 # Reference frames (ffmpeg auto-rotates) as raw RGBA for orientation checks
 q -i $O/clip-rotated.mp4 -frames:v 1 -f rawvideo -pix_fmt rgba $O/clip-rotated.frame0.rgba
 q -i $O/clip.mp4 -frames:v 1 -f rawvideo -pix_fmt rgba $O/clip.frame0.rgba
+q -i $O/clip-bframes.mkv -vf fps=10 -f rawvideo -pix_fmt rgba $O/clip-bframes.fps10.rgba

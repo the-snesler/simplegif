@@ -318,7 +318,16 @@ async function loadGif(
 	try {
 		while (dec.decodedCount < total) {
 			await yieldToEventLoop();
-			if (generation !== loadGeneration) break; // superseded by a newer import/reset
+			if (generation !== loadGeneration) {
+				// Superseded by a newer import/reset. If this partial state stays
+				// current (e.g. the newer import fails), the original bytes no
+				// longer describe it.
+				if (current === state) {
+					state = { ...state, bytes: null };
+					current = state;
+				}
+				break;
+			}
 			const sliceEnd = performance.now() + 30;
 			do {
 				const f = dec.next();
@@ -362,8 +371,10 @@ async function loadVideo(
 	ack: (result?: unknown) => void,
 	generation: number
 ): Promise<{ native: boolean }> {
-	if (generation !== loadGeneration) return { native: true }; // superseded
+	// `native: true` on cancellation: the import was superseded, so no fallback
+	if (generation !== loadGeneration) return { native: true };
 	const video = await demux(new Uint8Array(await file.arrayBuffer()));
+	if (generation !== loadGeneration) return { native: true };
 	if (!video) return { native: false };
 
 	const delay = Math.round(1000 / fps);
@@ -402,7 +413,7 @@ async function loadVideo(
 			},
 			cancelled: () => generation !== loadGeneration
 		});
-		if (!ok) return { native: false };
+		if (!ok) return { native: generation !== loadGeneration };
 	} catch (err) {
 		if (!state) return { native: false };
 		console.warn(`Video decode stopped at frame ${frames.length}/${total}:`, err);
@@ -431,7 +442,7 @@ async function loadImages(id: number, files: Blob[], fps: number, src: SourceInf
 			return r;
 		})
 	);
-	const delay = files.length === 1 ? 100 : Math.round(1000 / fps);
+	const delay = Math.round(1000 / fps);
 	source = src;
 	setState(
 		{
@@ -682,8 +693,12 @@ const preview = (() => {
 	function advance() {
 		const n = frameCount();
 		if (n === 0) return;
-		if (trim.enabled) index = index >= trim.end ? trim.start : index + 1;
-		else index = (index + 1) % n;
+		if (trim.enabled) {
+			// While streaming, frames past `n` aren't decoded yet: loop within what exists
+			const end = Math.min(trim.end, n - 1);
+			const start = Math.min(trim.start, end);
+			index = index >= end ? start : index + 1;
+		} else index = (index + 1) % n;
 	}
 
 	function delayOf(i: number) {
@@ -748,7 +763,8 @@ const preview = (() => {
 		play,
 		pause,
 		seek(frame: number) {
-			index = Math.max(0, Math.min(totalFrames() - 1, frame));
+			// Clamp to decoded frames so the playhead never points at a frame that isn't shown
+			index = Math.max(0, Math.min(frameCount() - 1, frame));
 			render();
 			if (playing) nextAt = performance.now() + delayOf(index);
 			announce();

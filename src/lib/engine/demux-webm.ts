@@ -228,15 +228,22 @@ export function demuxWebm(bytes: Uint8Array): DemuxedVideo | null {
 
 	const codec = vpxCodec(codecId, codecPrivate);
 	if (videoTrack < 0 || !codec || samples.length === 0) return null;
-	samples.sort((a, b) => a.timestampUs - b.timestampUs); // VPx has no B-frames; just in case
+	// Keep decode (file) order: H.264 in Matroska can have B-frames, whose
+	// timestamps are presentation times. Bounds come from min/max timestamps.
+	let minUs = Infinity;
+	let maxUs = -Infinity;
+	for (const s of samples) {
+		minUs = Math.min(minUs, s.timestampUs);
+		maxUs = Math.max(maxUs, s.timestampUs);
+	}
 	const frameUs = defaultDurationNs
 		? defaultDurationNs / 1000
 		: samples.length > 1
-			? (samples[samples.length - 1].timestampUs - samples[0].timestampUs) / (samples.length - 1)
+			? (maxUs - minUs) / (samples.length - 1)
 			: 100_000;
 	const endUs = Math.max(
 		durationTicks ? (durationTicks * timecodeScale) / 1000 : 0,
-		samples[samples.length - 1].timestampUs + frameUs
+		maxUs + frameUs
 	);
 	return {
 		codec,
@@ -248,7 +255,7 @@ export function demuxWebm(bytes: Uint8Array): DemuxedVideo | null {
 		codedHeight: height,
 		rotation: 0,
 		samples,
-		startUs: samples[0].timestampUs,
+		startUs: minUs,
 		endUs
 	};
 }

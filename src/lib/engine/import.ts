@@ -15,7 +15,16 @@ export function detectFileType(file: File): 'gif' | 'video' | 'image' | 'unknown
 
 const progress = (pct: number, text?: string) => processing.update(pct, text);
 
+/** Bumped by every import, so a slow (ffmpeg) import can tell it was superseded. */
+let importToken = 0;
+
+/** Invalidate any in-flight import (e.g. when the project is cleared). */
+export function cancelPendingImports() {
+	importToken++;
+}
+
 export async function importVideo(file: File, fps: number) {
+	const token = ++importToken;
 	processing.update(0, 'Decoding video...');
 	try {
 		const native = await engine.loadVideo(file, fps, progress);
@@ -23,6 +32,7 @@ export async function importVideo(file: File, fps: number) {
 	} catch (err) {
 		console.warn('Native video decode failed, falling back to ffmpeg:', err);
 	}
+	if (token !== importToken) return;
 	processing.update(0, 'Loading ffmpeg...');
 	const [{ fetchFile }, { videoToRaw }] = await Promise.all([
 		import('@ffmpeg/util'),
@@ -33,6 +43,7 @@ export async function importVideo(file: File, fps: number) {
 	const raw = await videoToRaw(data, file.name, fps, (pct) =>
 		processing.update(10 + pct * 0.9, 'Extracting frames...')
 	);
+	if (token !== importToken) return; // a newer import started while ffmpeg ran
 	await engine.loadRaw(raw, fps, sourceOf(file));
 }
 
@@ -43,6 +54,7 @@ export function filterImages(files: File[]) {
 }
 
 export async function importSequence(files: File[], fps: number) {
+	importToken++;
 	const images = filterImages(files);
 	if (images.length === 0) return;
 	await engine.loadImages(
@@ -58,6 +70,7 @@ export async function importSequence(files: File[], fps: number) {
 }
 
 export async function importFile(file: File) {
+	if (detectFileType(file) !== 'video') importToken++;
 	switch (detectFileType(file)) {
 		case 'gif':
 			return engine.loadGif(file, progress);

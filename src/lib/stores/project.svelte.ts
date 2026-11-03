@@ -55,7 +55,11 @@ export const project = {
 		return meta.version;
 	},
 	async reset() {
-		const { engine } = await import('$lib/engine/client');
+		const [{ engine }, { cancelPendingImports }] = await Promise.all([
+			import('$lib/engine/client'),
+			import('$lib/engine/import')
+		]);
+		cancelPendingImports();
 		await engine.reset();
 	},
 	/** @internal called by the engine client */

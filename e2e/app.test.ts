@@ -93,6 +93,52 @@ test.describe('import', () => {
 		});
 	}
 
+	test('video: H.264 with B-frames in MKV decodes every frame correctly', async ({ page }) => {
+		await open(page, '/convert');
+		await load(page, fixture('clip-bframes.mkv'));
+		const ref = new Uint8Array(fs.readFileSync(fixture('clip-bframes.fps10.rgba')));
+		const frameBytes = 320 * 240 * 4;
+		const refCount = ref.length / frameBytes;
+		const { gif } = await download(page);
+		expect(Math.abs(gif.frames.length - refCount)).toBeLessThanOrEqual(1);
+		for (const i of [0, Math.floor(refCount / 2), refCount - 2]) {
+			const f = gif.frames[i].data;
+			let sum = 0;
+			for (let p = 0; p < frameBytes; p += 4)
+				for (let k = 0; k < 3; k++) sum += Math.abs(f[p + k] - ref[i * frameBytes + p + k]);
+			expect(sum / ((frameBytes / 4) * 3)).toBeLessThan(20);
+		}
+	});
+
+	test('a superseded video import never replaces the newer one', async ({ page }) => {
+		const ffmpeg: string[] = [];
+		page.on('request', (r) => r.url().includes('ffmpeg-core') && ffmpeg.push(r.url()));
+		await open(page, '/convert');
+		const input = page.locator('input[type=file]').first();
+		await input.setInputFiles(fixture('clip720.mp4'));
+		await input.setInputFiles(fixture('clip-vp8.webm'));
+		await settle(page);
+		await page.waitForTimeout(3000);
+		expect(await info(page)).toMatchObject({ width: 320, height: 240 });
+		expect(ffmpeg).toEqual([]); // the superseded import must not fall back to ffmpeg
+	});
+
+	test('a stream cut short by a failing import exports what is shown', async ({ page }) => {
+		await open(page, '/');
+		await page.locator('input[type=file]').first().setInputFiles(fixture('large.gif'));
+		await expect(page.locator('span.tabular-nums.font-mono')).toBeVisible();
+		await page
+			.getByRole('link', { name: 'Video to GIF' })
+			.filter({ visible: true })
+			.first()
+			.click();
+		await page.locator('input[type=file]').first().setInputFiles(fixture('junk.mp4'));
+		await settle(page);
+		const { frames } = await info(page);
+		const { gif } = await download(page);
+		expect(gif.frames.length).toBe(frames);
+	});
+
 	test('image sequence and single image', async ({ page }) => {
 		const seqDir = fixture('seq');
 		const files = fs
