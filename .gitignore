@@ -22,3 +22,8 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# generated test fixtures / results
+e2e/fixtures/out
+bench/results/*.local.json
+test-results

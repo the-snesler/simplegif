@@ -4,13 +4,6 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { importVideo } from '$lib/engine/import';
-	import { ffmpegStore } from '$lib/stores/ffmpeg.svelte';
-	import { onMount } from 'svelte';
-
-	// Start downloading ffmpeg while the user picks a file
-	onMount(() => {
-		ffmpegStore.load().catch((err) => console.warn('ffmpeg prefetch failed:', err));
-	});
 
 	let fps = $state(10);
 	let fileInput = $state<HTMLInputElement | null>(null);

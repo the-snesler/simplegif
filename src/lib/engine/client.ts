@@ -96,6 +96,14 @@ export const engine = {
 	loadGif(file: File, onProgress?: Progress) {
 		return send({ type: 'loadGif', file, source: sourceOf(file) }, [], onProgress);
 	},
+	/** Native (WebCodecs) video import; resolves { native: false } if unsupported. */
+	loadVideo(file: File, fps: number, onProgress?: Progress) {
+		return send<{ native: boolean } | undefined>(
+			{ type: 'loadVideo', file, fps, source: sourceOf(file) },
+			[],
+			onProgress
+		);
+	},
 	loadImages(files: Blob[], fps: number, source: SourceInfo, onProgress?: Progress) {
 		return send({ type: 'loadImages', files, fps, source }, [], onProgress);
 	},

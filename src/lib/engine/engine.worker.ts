@@ -20,6 +20,7 @@ import type { PixelOp, Raster } from './frame-ops';
 import { applyPixelOp, type EncodedFrame } from './frame-ops';
 import { Cancelled, Pool, type Priority } from './pool';
 import { allocPixels, toImageData, type PixelArray } from './pixels';
+import { decodeVideo, demux } from './video-decode';
 import { decodeGifBytes, GifDecoder } from '$lib/processing/codec/gif-decoder';
 import { encodeGce, encodeGifHeader, GIF_TRAILER } from '$lib/processing/codec/gif-writer';
 import type { OptimizeOptions } from '$lib/types';
@@ -346,6 +347,75 @@ async function loadGif(
 		strip.render();
 		schedulePreencode();
 	}
+}
+
+/**
+ * Streaming native video import (WebCodecs). Resolves { native: false }
+ * without touching state if the container/codec isn't supported, so the
+ * page can fall back to ffmpeg.wasm.
+ */
+async function loadVideo(
+	id: number,
+	file: Blob,
+	fps: number,
+	src: SourceInfo,
+	ack: (result?: unknown) => void,
+	generation: number
+): Promise<{ native: boolean }> {
+	if (generation !== loadGeneration) return { native: true }; // superseded
+	const video = await demux(new Uint8Array(await file.arrayBuffer()));
+	if (!video) return { native: false };
+
+	const delay = Math.round(1000 / fps);
+	const frames: Frame[] = [];
+	let state: State | null = null;
+	let px: Pixels | null = null;
+	let total = 0;
+	let lastPost = 0;
+	try {
+		const ok = await decodeVideo(video, fps, {
+			onStart({ width, height, count }) {
+				total = count;
+				state = { width, height, frameRate: fps, bytes: null, frames };
+			},
+			onFrame(data, slot) {
+				const s = state!;
+				// Slots that repeat a source frame share one buffer (and one encode)
+				if (!px || px.data !== data) px = { data, width: s.width, height: s.height };
+				frames.push({ px, delay, keep: false });
+				if (slot === 0) {
+					source = src;
+					loading = total > 1 ? { total, duration: total * delay } : null;
+					setState(s, { history: 'clear' });
+					ack({ native: true });
+				}
+				const now = performance.now();
+				if (now - lastPost > 50) {
+					lastPost = now;
+					post({
+						type: 'progress',
+						id,
+						pct: (frames.length / total) * 100,
+						text: 'Decoding video...'
+					});
+				}
+			},
+			cancelled: () => generation !== loadGeneration
+		});
+		if (!ok) return { native: false };
+	} catch (err) {
+		if (!state) return { native: false };
+		console.warn(`Video decode stopped at frame ${frames.length}/${total}:`, err);
+	} finally {
+		if (state) {
+			loading = null;
+			version++;
+			post({ type: 'meta', meta: meta() });
+			strip.render();
+			schedulePreencode();
+		}
+	}
+	return { native: true };
 }
 
 async function loadImages(id: number, files: Blob[], fps: number, src: SourceInfo) {
@@ -757,14 +827,14 @@ const strip = (() => {
 let queue: Promise<unknown> = Promise.resolve();
 
 /** Serialize state-changing requests; control messages are handled immediately. */
-function enqueue(id: number, fn: (ack: () => void) => Promise<unknown> | unknown) {
+function enqueue(id: number, fn: (ack: (result?: unknown) => void) => Promise<unknown> | unknown) {
 	queue = queue.then(async () => {
 		let acked = false;
 		// Lets a long request (streaming import) reply early while still holding the queue
-		const ack = () => {
+		const ack = (result?: unknown) => {
 			if (acked) return;
 			acked = true;
-			post({ type: 'reply', id, ok: true });
+			post({ type: 'reply', id, ok: true, result });
 		};
 		try {
 			const result = await fn(ack);
@@ -824,6 +894,10 @@ function handle(id: number, req: EngineRequest) {
 		case 'loadGif': {
 			const generation = ++loadGeneration;
 			return enqueue(id, (ack) => loadGif(id, req.file, req.source, ack, generation));
+		}
+		case 'loadVideo': {
+			const generation = ++loadGeneration;
+			return enqueue(id, (ack) => loadVideo(id, req.file, req.fps, req.source, ack, generation));
 		}
 		case 'loadImages':
 			loadGeneration++;

@@ -30,6 +30,7 @@ export type EngineRequest =
 	| { type: 'init'; helpers: MessagePort[] }
 	| { type: 'loadGif'; file: Blob; source: SourceInfo }
 	| { type: 'loadImages'; files: Blob[]; fps: number; source: SourceInfo }
+	| { type: 'loadVideo'; file: Blob; fps: number; source: SourceInfo }
 	| {
 			type: 'loadRaw';
 			buffer: ArrayBuffer;

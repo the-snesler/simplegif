@@ -16,6 +16,13 @@ export function detectFileType(file: File): 'gif' | 'video' | 'image' | 'unknown
 const progress = (pct: number, text?: string) => processing.update(pct, text);
 
 export async function importVideo(file: File, fps: number) {
+	processing.update(0, 'Decoding video...');
+	try {
+		const native = await engine.loadVideo(file, fps, progress);
+		if (native?.native !== false) return;
+	} catch (err) {
+		console.warn('Native video decode failed, falling back to ffmpeg:', err);
+	}
 	processing.update(0, 'Loading ffmpeg...');
 	const [{ fetchFile }, { videoToRaw }] = await Promise.all([
 		import('@ffmpeg/util'),

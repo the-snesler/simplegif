@@ -57,6 +57,7 @@
 	"dependencies": {
 		"@ffmpeg/ffmpeg": "^0.12.15",
 		"@ffmpeg/util": "^0.12.2",
-		"@fontsource/fusion-pixel-10px-proportional-jp": "^5.2.5"
+		"@fontsource/fusion-pixel-10px-proportional-jp": "^5.2.5",
+		"mp4box": "^2.5.0"
 	}
 }
