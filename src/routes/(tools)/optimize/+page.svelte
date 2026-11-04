@@ -4,14 +4,8 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
-	import { optimizeFrames } from '$lib/processing/transforms/optimize';
-	import { encodeGif } from '$lib/processing/encoder';
-	import { decodeGif } from '$lib/processing/decoder';
-	import {
-		runGifsicle,
-		defaultGifsicleOptions,
-		type GifsicleOptions
-	} from '$lib/processing/gifsicle';
+	import { engine } from '$lib/engine/client';
+	import { defaultGifsicleOptions, type GifsicleOptions } from '$lib/processing/gifsicle-options';
 	import type { OptimizeMethod, OptimizeOptions } from '$lib/types';
 
 	$effect(() => {
@@ -94,11 +88,9 @@
 		} else {
 			processing.start('Optimizing...');
 			try {
-				const opts = buildOptions();
-				const optimized = optimizeFrames(project.frames, opts, (pct) => {
-					processing.update(pct);
-				});
-				project.updateFrames(optimized);
+				await engine.edit({ op: 'optimize', options: buildOptions() }, (pct) =>
+					processing.update(pct)
+				);
 			} catch (err) {
 				console.error('Optimization failed:', err);
 			} finally {
@@ -108,33 +100,15 @@
 	}
 
 	async function handleGifsicle() {
-		applyAction.onPausePreview?.();
 		processing.start('Encoding GIF for gifsicle...');
 		try {
-			// First encode current frames to a GIF blob
-			const inputBlob = await encodeGif(project.frames, project.width, project.height);
-			beforeSize = inputBlob.size;
 			afterSize = null;
-
-			processing.update(25, 'Running gifsicle...');
-			const opts = buildGifsicleOptions();
-			const outputBlob = await runGifsicle(inputBlob, opts);
-			afterSize = outputBlob.size;
-
-			// Store the blob for direct download (skip re-encoding)
-			project.setOptimizedBlob(outputBlob);
-
-			// Decode the result back to frames for preview
-			processing.update(75, 'Updating preview...');
-			const buffer = await outputBlob.arrayBuffer();
-			const { frames, width, height } = await decodeGif(buffer);
-			project.updateFrames(frames);
-			// Re-set the blob since updateFrames clears it
-			project.setOptimizedBlob(outputBlob);
-
-			if (width !== project.width || height !== project.height) {
-				project.updateDimensions(width, height);
-			}
+			const result = await engine.edit(
+				{ op: 'gifsicle', options: buildGifsicleOptions() },
+				(pct, text) => processing.update(pct, text)
+			);
+			beforeSize = result?.beforeSize ?? null;
+			afterSize = result?.afterSize ?? null;
 		} catch (err) {
 			console.error('Gifsicle optimization failed:', err);
 		} finally {

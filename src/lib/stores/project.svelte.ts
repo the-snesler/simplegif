@@ -1,76 +1,69 @@
-import type { FrameData, ProjectFile } from '$lib/types';
+/**
+ * Main-thread mirror of the project held by the engine worker. Pixel data
+ * never lives here — only metadata needed to render the UI.
+ */
+import type { ProjectMeta, SourceInfo } from '$lib/engine/protocol';
 
-let sourceFile = $state<ProjectFile | null>(null);
-let frames = $state<FrameData[]>([]);
-let width = $state(0);
-let height = $state(0);
-let frameRate = $state(10);
-let isLoaded = $state(false);
-let optimizedBlob = $state<Blob | null>(null);
+let meta = $state.raw<ProjectMeta>({
+	isLoaded: false,
+	source: null,
+	width: 0,
+	height: 0,
+	frameRate: 10,
+	frameCount: 0,
+	duration: 0,
+	decoding: false,
+	canUndo: false,
+	canRedo: false,
+	version: 0
+});
 
 export const project = {
-	get sourceFile() {
-		return sourceFile;
+	get isLoaded() {
+		return meta.isLoaded;
 	},
-	get frames() {
-		return frames;
+	get sourceFile(): SourceInfo | null {
+		return meta.source;
 	},
 	get width() {
-		return width;
+		return meta.width;
 	},
 	get height() {
-		return height;
+		return meta.height;
 	},
 	get frameRate() {
-		return frameRate;
-	},
-	get isLoaded() {
-		return isLoaded;
-	},
-	get optimizedBlob() {
-		return optimizedBlob;
+		return meta.frameRate;
 	},
 	get frameCount() {
-		return frames.length;
+		return meta.frameCount;
 	},
 	get duration() {
-		return frames.reduce((sum, f) => sum + f.delay, 0);
+		return meta.duration;
 	},
-
-	setSource(file: ProjectFile, decodedFrames: FrameData[], w: number, h: number, fps: number) {
-		sourceFile = file;
-		frames = decodedFrames;
-		width = w;
-		height = h;
-		frameRate = fps;
-		isLoaded = true;
+	/** Frames are still streaming in from the engine */
+	get decoding() {
+		return meta.decoding;
 	},
-
-	updateFrames(newFrames: FrameData[]) {
-		frames = newFrames;
-		optimizedBlob = null;
+	get canUndo() {
+		return meta.canUndo;
 	},
-
-	setOptimizedBlob(blob: Blob | null) {
-		optimizedBlob = blob;
+	get canRedo() {
+		return meta.canRedo;
 	},
-
-	updateDimensions(w: number, h: number) {
-		width = w;
-		height = h;
+	/** Bumps on every engine state change */
+	get version() {
+		return meta.version;
 	},
-
-	updateFrameRate(fps: number) {
-		frameRate = fps;
+	async reset() {
+		const [{ engine }, { cancelPendingImports }] = await Promise.all([
+			import('$lib/engine/client'),
+			import('$lib/engine/import')
+		]);
+		cancelPendingImports();
+		await engine.reset();
 	},
-
-	reset() {
-		sourceFile = null;
-		frames = [];
-		width = 0;
-		height = 0;
-		frameRate = 10;
-		isLoaded = false;
-		optimizedBlob = null;
+	/** @internal called by the engine client */
+	_sync(next: ProjectMeta) {
+		meta = next;
 	}
 };

@@ -4,7 +4,7 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
-	import { changeFrameRate } from '$lib/processing/transforms/framerate';
+	import { engine } from '$lib/engine/client';
 
 	$effect(() => {
 		applyAction.set(applyFrameRate);
@@ -22,9 +22,7 @@
 	async function applyFrameRate() {
 		processing.start('Adjusting frame rate...');
 		try {
-			const newFrames = changeFrameRate(project.frames, targetFps);
-			project.updateFrames(newFrames);
-			project.updateFrameRate(targetFps);
+			await engine.edit({ op: 'framerate', fps: targetFps });
 		} catch (err) {
 			console.error('Failed to change frame rate:', err);
 		} finally {

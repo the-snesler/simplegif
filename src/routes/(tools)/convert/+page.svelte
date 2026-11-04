@@ -3,7 +3,7 @@
 	import SliderInput from '$lib/components/controls/SliderInput.svelte';
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
-	import { videoToFrames } from '$lib/processing/ffmpeg-bridge';
+	import { importVideo } from '$lib/engine/import';
 
 	let fps = $state(10);
 	let fileInput = $state<HTMLInputElement | null>(null);
@@ -15,19 +15,7 @@
 
 		processing.start('Loading ffmpeg...');
 		try {
-			const { fetchFile } = await import('@ffmpeg/util');
-			const data = await fetchFile(file);
-			processing.update(10, 'Extracting frames...');
-			const { frames, width, height } = await videoToFrames(data, file.name, fps, (pct) =>
-				processing.update(10 + pct * 0.9, 'Extracting frames...')
-			);
-			project.setSource(
-				{ name: file.name, type: file.type, size: file.size, blob: file },
-				frames,
-				width,
-				height,
-				fps
-			);
+			await importVideo(file, fps);
 		} catch (err) {
 			console.error('Failed to convert video:', err);
 		} finally {

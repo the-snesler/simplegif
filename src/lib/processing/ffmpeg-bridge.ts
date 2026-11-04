@@ -1,86 +1,68 @@
-import type { FrameData } from '$lib/types';
 import { ffmpegStore } from '$lib/stores/ffmpeg.svelte';
 
-export async function videoToFrames(
+export interface RawVideo {
+	buffer: ArrayBuffer;
+	width: number;
+	height: number;
+	count: number;
+}
+
+/**
+ * Extract frames as one raw RGBA stream (no per-frame PNG encode/decode).
+ * Output dimensions are read from ffmpeg's log of the output stream.
+ */
+export async function videoToRaw(
 	fileData: Uint8Array,
 	fileName: string,
 	fps: number = 10,
 	onProgress?: (pct: number) => void
-): Promise<{ frames: FrameData[]; width: number; height: number }> {
+): Promise<RawVideo> {
 	const ffmpeg = await ffmpegStore.load();
+	const inName = `in_${Date.now()}_${fileName.replace(/[^\w.-]/g, '_')}`;
+	const outName = 'out.rgba';
 
-	ffmpeg.on('progress', ({ progress }) => {
-		if (progress > 0.01 && progress < 0.99) {
-			onProgress?.(progress * 100);
-		}
-	});
-
-	await ffmpeg.writeFile(fileName, fileData);
-
-	await ffmpeg.exec(['-i', fileName, '-vf', `fps=${fps}`, '-f', 'image2', 'frame_%04d.png']);
-
-	const frames: FrameData[] = [];
-	let i = 1;
-	while (true) {
-		const frameName = `frame_${String(i).padStart(4, '0')}.png`;
-		try {
-			const data = await ffmpeg.readFile(frameName);
-			const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
-			const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'image/png' });
-			const bitmap = await createImageBitmap(blob);
-			const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-			const ctx = canvas.getContext('2d')!;
-			ctx.drawImage(bitmap, 0, 0);
-			frames.push({
-				imageData: ctx.getImageData(0, 0, bitmap.width, bitmap.height),
-				delay: Math.round(1000 / fps)
-			});
-			bitmap.close();
-			await ffmpeg.deleteFile(frameName);
-			i++;
-		} catch {
-			break;
-		}
-	}
-
-	await ffmpeg.deleteFile(fileName);
-	onProgress?.(100);
-
-	return {
-		frames,
-		width: frames[0]?.imageData.width ?? 0,
-		height: frames[0]?.imageData.height ?? 0
+	let dims: { width: number; height: number } | null = null;
+	let inOutput = false;
+	const onLog = ({ message }: { message: string }) => {
+		if (/^Output #0/.test(message)) inOutput = true;
+		if (!inOutput || dims) return;
+		const m = /Video: rawvideo.*?\b(\d{1,5})x(\d{1,5})\b/.exec(message);
+		if (m) dims = { width: Number(m[1]), height: Number(m[2]) };
 	};
-}
-
-export async function imageSequenceToFrames(
-	files: File[],
-	fps: number = 10,
-	onProgress?: (pct: number) => void
-): Promise<{ frames: FrameData[]; width: number; height: number }> {
-	const sorted = [...files].sort((a, b) =>
-		a.name.localeCompare(b.name, undefined, { numeric: true })
-	);
-	const frames: FrameData[] = [];
-	const delay = Math.round(1000 / fps);
-
-	for (let i = 0; i < sorted.length; i++) {
-		const file = sorted[i];
-		const bitmap = await createImageBitmap(file);
-		const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-		const ctx = canvas.getContext('2d')!;
-		ctx.drawImage(bitmap, 0, 0);
-		frames.push({
-			imageData: ctx.getImageData(0, 0, bitmap.width, bitmap.height),
-			delay
-		});
-		bitmap.close();
-		onProgress?.(((i + 1) / sorted.length) * 100);
-	}
-
-	return {
-		frames,
-		width: frames[0]?.imageData.width ?? 0,
-		height: frames[0]?.imageData.height ?? 0
+	const onProg = ({ progress }: { progress: number }) => {
+		if (progress > 0.01 && progress < 0.99) onProgress?.(progress * 100);
 	};
+	ffmpeg.on('log', onLog);
+	ffmpeg.on('progress', onProg);
+
+	try {
+		await ffmpeg.writeFile(inName, fileData);
+		await ffmpeg.exec([
+			'-i',
+			inName,
+			'-vf',
+			`fps=${fps}`,
+			'-f',
+			'rawvideo',
+			'-pix_fmt',
+			'rgba',
+			outName
+		]);
+		const data = await ffmpeg.readFile(outName);
+		if (typeof data === 'string') throw new Error('Unexpected ffmpeg output');
+		if (!dims) throw new Error('Could not determine video dimensions');
+		const { width, height } = dims as { width: number; height: number };
+		const count = Math.floor(data.byteLength / (width * height * 4));
+		const buffer =
+			data.byteOffset === 0 && data.byteLength === data.buffer.byteLength
+				? (data.buffer as ArrayBuffer)
+				: (data.slice().buffer as ArrayBuffer);
+		onProgress?.(100);
+		return { buffer, width, height, count };
+	} finally {
+		ffmpeg.off('log', onLog);
+		ffmpeg.off('progress', onProg);
+		await ffmpeg.deleteFile(inName).catch(() => {});
+		await ffmpeg.deleteFile(outName).catch(() => {});
+	}
 }

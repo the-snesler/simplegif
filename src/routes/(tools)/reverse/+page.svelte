@@ -3,7 +3,7 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
-	import { reverseFrames } from '$lib/processing/transforms/reverse';
+	import { engine } from '$lib/engine/client';
 
 	$effect(() => {
 		applyAction.set(applyReverse, 'Reverse Frames');
@@ -13,8 +13,7 @@
 	async function applyReverse() {
 		processing.start('Reversing frames...');
 		try {
-			const newFrames = reverseFrames(project.frames);
-			project.updateFrames(newFrames);
+			await engine.edit({ op: 'reverse' });
 		} catch (err) {
 			console.error('Failed to reverse:', err);
 		} finally {

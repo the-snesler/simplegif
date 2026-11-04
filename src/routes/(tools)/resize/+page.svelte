@@ -4,7 +4,7 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
-	import { resizeFrames } from '$lib/processing/transforms/resize';
+	import { engine } from '$lib/engine/client';
 
 	$effect(() => {
 		applyAction.set(applyResize);
@@ -47,11 +47,9 @@
 	async function applyResize() {
 		processing.start('Resizing frames...');
 		try {
-			const newFrames = resizeFrames(project.frames, targetWidth, targetHeight, (pct) =>
+			await engine.edit({ op: 'resize', width: targetWidth, height: targetHeight }, (pct) =>
 				processing.update(pct)
 			);
-			project.updateFrames(newFrames);
-			project.updateDimensions(targetWidth, targetHeight);
 		} catch (err) {
 			console.error('Failed to resize:', err);
 		} finally {

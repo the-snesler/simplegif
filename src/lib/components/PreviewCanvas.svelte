@@ -1,116 +1,15 @@
 <script lang="ts">
 	import { project } from '$lib/stores/project.svelte';
-	import { filmstrip } from '$lib/stores/filmstrip.svelte';
 	import { cropStore } from '$lib/stores/crop.svelte';
+	import { engine } from '$lib/engine/client';
 	import CropOverlay from './controls/CropOverlay.svelte';
-	import { untrack } from 'svelte';
 
 	let canvas = $state<HTMLCanvasElement | null>(null);
-	let currentFrame = $state(0);
-	let isPlaying = $state(true);
 
-	// Not reactive — only used for animation bookkeeping
-	let animationId: number | null = null;
-	let lastFrameTime = 0;
-
-	export function getCurrentFrame() {
-		return currentFrame;
-	}
-
-	export function setCurrentFrame(frame: number) {
-		currentFrame = frame;
-		renderFrame();
-	}
-
-	export function getIsPlaying() {
-		return isPlaying;
-	}
-
-	export function togglePlayback() {
-		if (isPlaying) {
-			pause();
-		} else {
-			play();
-		}
-	}
-
-	export function play() {
-		isPlaying = true;
-		lastFrameTime = performance.now();
-		animate();
-	}
-
-	export function pause() {
-		isPlaying = false;
-		if (animationId !== null) {
-			cancelAnimationFrame(animationId);
-			animationId = null;
-		}
-	}
-
-	function animate() {
-		if (!isPlaying || project.frameCount === 0) return;
-
-		const now = performance.now();
-		const frame = project.frames[currentFrame];
-		const delay = frame?.delay || 100;
-
-		if (now - lastFrameTime >= delay) {
-			// When trim mode is active, loop within trim bounds
-			if (filmstrip.trimMode) {
-				const start = filmstrip.trimStart;
-				const end = filmstrip.trimEnd;
-				currentFrame = currentFrame >= end ? start : currentFrame + 1;
-			} else {
-				currentFrame = (currentFrame + 1) % project.frameCount;
-			}
-			renderFrame();
-			lastFrameTime = now;
-		}
-
-		animationId = requestAnimationFrame(animate);
-	}
-
-	function renderFrame() {
-		if (!canvas || project.frameCount === 0) return;
-
-		const ctx = canvas.getContext('2d');
-		if (!ctx) return;
-
-		const frame = project.frames[currentFrame];
-		if (!frame) return;
-
-		canvas.width = project.width;
-		canvas.height = project.height;
-		ctx.putImageData(frame.imageData, 0, 0);
-	}
-
+	// Rendering and playback happen in the engine worker; hand it the canvas once.
 	$effect(() => {
-		// Track only these dependencies
-		const loaded = project.isLoaded;
-		const count = project.frameCount;
-
-		if (loaded && count > 0) {
-			untrack(() => {
-				// Stop any existing animation before restarting
-				if (animationId !== null) {
-					cancelAnimationFrame(animationId);
-					animationId = null;
-				}
-				currentFrame = 0;
-				renderFrame();
-				if (count > 1) {
-					play();
-				}
-			});
-		}
-
-		return () => {
-			if (animationId !== null) {
-				cancelAnimationFrame(animationId);
-				animationId = null;
-			}
-		};
+		if (!canvas) return;
+		engine.attachPreview(canvas.transferControlToOffscreen());
 	});
 </script>
 
@@ -121,8 +20,6 @@
 	>
 		<canvas
 			bind:this={canvas}
-			width={project.width}
-			height={project.height}
 			class="max-h-full max-w-full rounded bg-zinc-900 object-contain"
 			style="image-rendering: pixelated;"
 		></canvas>

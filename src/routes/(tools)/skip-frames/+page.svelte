@@ -4,7 +4,7 @@
 	import { project } from '$lib/stores/project.svelte';
 	import { processing } from '$lib/stores/processing.svelte';
 	import { applyAction } from '$lib/stores/applyAction.svelte';
-	import { skipFrames } from '$lib/processing/transforms/skip-frames';
+	import { engine } from '$lib/engine/client';
 
 	$effect(() => {
 		applyAction.set(applySkip);
@@ -16,8 +16,7 @@
 	async function applySkip() {
 		processing.start('Skipping frames...');
 		try {
-			const newFrames = skipFrames(project.frames, keepEveryN);
-			project.updateFrames(newFrames);
+			await engine.edit({ op: 'skip', keepEveryN });
 		} catch (err) {
 			console.error('Failed to skip frames:', err);
 		} finally {
